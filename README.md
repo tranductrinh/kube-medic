@@ -38,8 +38,6 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 
 ## Installation
 
-### From Source
-
 ```bash
 # Clone the repository
 git clone https://github.com/tranductrinh/kube-medic.git
@@ -49,11 +47,11 @@ cd kube-medic
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 
-# Install dependencies
-pip install -r requirements.txt
+# Install
+pip install -e ".[dev]"
 ```
 
-### Configuration
+## Configuration
 
 Create a `.env` file based on `.env.example`:
 
@@ -76,5 +74,17 @@ The program will exit if required variables are missing.
 ## Usage
 
 ```bash
-python src/main.py
+# Run interactive mode
+python -m kube_medic.main
+```
+
+## Example Queries
+
+```
+"Check cluster health"
+"What pods are running in the monitoring-system namespace?"
+"Which pod has the most restarts?"
+"Show me the logs for that pod"
+"What's using the most CPU?"
+"Are there any errors in the events?"
 ```
