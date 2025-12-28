@@ -1,5 +1,5 @@
 """
-Unit tests for Kube Medic.
+Unit tests for KubeMedic.
 
 Run with: pytest tests/ -v
 """

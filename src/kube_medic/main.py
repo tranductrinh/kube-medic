@@ -20,7 +20,7 @@ from kube_medic.utils import stream_agent
 
 def main() -> int:
     """
-    Main entry point for Kube Medic.
+    Main entry point for KubeMedic.
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -57,7 +57,7 @@ def main() -> int:
     # 3. Interactive Loop
     # -------------------------------------------------------------------------
     print("=" * 60)
-    print("KUBE MEDIC - Kubernetes Troubleshooting Agent")
+    print("KUBE MEDIC - AI-powered Kubernetes troubleshooting assistant")
     print("=" * 60)
     print("Commands:")
     print("  - Type your question and press Enter")

@@ -1,5 +1,5 @@
 """
-Tools package for Kube Medic.
+Tools package for KubeMedic.
 
 This package contains all tools that agents can use:
 - kubernetes: K8s API tools (pods, logs, events)
