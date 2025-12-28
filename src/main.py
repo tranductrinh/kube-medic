@@ -12,12 +12,18 @@ from pydantic import BaseModel, Field
 # Load environment variables
 load_dotenv()
 
-# Monitoring service endpoints
-if not os.environ.get("PROMETHEUS_URL"):
-    print("PROMETHEUS_URL not set!")
-    exit(1)
+# Check required environment variables
+required_vars = [
+    "AZURE_OPENAI_ENDPOINT",
+    "AZURE_OPENAI_API_KEY",
+    "AZURE_OPENAI_DEPLOYMENT_NAME",
+    "PROMETHEUS_URL",
+]
+for var in required_vars:
+    if not os.environ.get(var):
+        print(f"{var} is not set in environment variables!")
+        exit(1)
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL")
-print(f"Prometheus URL: {PROMETHEUS_URL}")
 
 # Load Kubernetes configuration
 try:
@@ -29,14 +35,24 @@ except config.ConfigException:
         print("Could not load Kubernetes config!")
         exit(1)
 
-# Kubernetes tools
+# Initialize Kubernetes client
 v1 = client.CoreV1Api()
+
+# Initialize LLM
+llm = AzureChatOpenAI(
+    azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+    api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+    azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"),
+    api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-08-01-preview"),
+    temperature=0,
+    max_tokens=2048,
+)
 
 
 class ListPodsInput(BaseModel):
     """Input schema for listing pods."""
     namespace: str = Field(
-        default="",0
+        default="",
         description="Kubernetes namespace. Leave empty for all namespaces."
     )
     label_selector: str = Field(
@@ -302,25 +318,8 @@ def list_namespaces() -> str:
         return f"Error listing namespaces: {str(e)}"
 
 
-# Create an LLM model
-if not os.environ.get("AZURE_OPENAI_ENDPOINT"):
-    print("AZURE_OPENAI_ENDPOINT not set!")
-    exit(1)
-if not os.environ.get("AZURE_OPENAI_API_KEY"):
-    print("AZURE_OPENAI_API_KEY not set!")
-    exit(1)
-if not os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"):
-    print("AZURE_OPENAI_DEPLOYMENT_NAME not set!")
-    exit(1)
-
-llm = AzureChatOpenAI(
-    azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-    azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"),
-    api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-08-01-preview"),
-    temperature=0,
-    max_tokens=2048,
-)
+# Group K8s tools
+kubernetes_tools = [list_namespaces, list_pods, get_pod_details, get_pod_logs, get_events]
 
 
 # Prometheus tools
@@ -542,83 +541,151 @@ def get_cluster_health() -> str:
     return "\n".join(lines)
 
 
-# ALL tools
-tools = [
-    # Kubernetes
-    list_namespaces,
-    list_pods,
-    get_pod_details,
-    get_pod_logs,
-    get_events,
-    # Prometheus
-    prometheus_query,
-    get_pod_cpu_memory,
-    get_pod_restarts,
-    get_cluster_health,
-]
+# Group Prometheus tools
+prometheus_tools = [prometheus_query, get_pod_cpu_memory, get_pod_restarts, get_cluster_health]
 
-# Enhanced system prompt with troubleshooting methodology
-system_prompt = """You are an expert Kubernetes troubleshooting assistant with access to:
-- Kubernetes API (namespaces, pods, pod logs, events)
-- Prometheus metrics (CPU, memory, restarts)
-
-TROUBLESHOOTING METHODOLOGY:
-
-1. UNDERSTAND the problem
-   - What is the user asking about?
-   - Which namespace/pods are affected?
-
-2. GATHER data systematically
-   - Start with get_cluster_health for overview
-   - Check pod status with list_pods
-   - Look at events with get_events
-   - Check pod details with get_pod_details
-   - Get pod logs with get_pod_logs
-   - Check metrics with get_pod_cpu_memory or get_pod_restarts
-
-3. ANALYZE the data
-   - Correlate events, metrics, and logs
-   - Identify patterns (high restarts, memory spikes, error messages)
-   - Consider common root causes
-
-4. REPORT findings clearly
-   - Summarize what you found
-   - Identify the likely root cause
-   - Recommend specific actions (but NEVER auto-fix)
-
-COMMON TROUBLESHOOTING SCENARIOS:
-
-- Pod CrashLoopBackOff → Check logs for startup errors, check memory limits
-- Pod Pending → Check events for scheduling issues, node resources
-- High latency → Check CPU/memory metrics, look for throttling
-- Application errors → Search logs for exceptions, check dependencies
-
-RULES:
-- Always use tools to get real data
-- Be systematic - don't jump to conclusions
-- Highlight critical findings (errors, high restarts, resource issues)
-- Provide actionable recommendations"""
-
-# Create the agent
-agent = create_agent(
+# Kubernetes Specialist Agent
+kubernetes_agent = create_agent(
     model=llm,
-    tools=tools,
-    system_prompt=system_prompt,
+    tools=kubernetes_tools,
+    system_prompt="""
+    You are a Kubernetes expert. You help investigate Kubernetes 
+    resources, pod states, logs, and events.
+
+    Your tools:
+    - list_namespaces: See cluster namespaces
+    - list_pods: Check pod status and restarts
+    - get_pod_details: Deep dive into specific pods
+    - get_pod_logs: Read application logs
+    - get_events: Find K8s events (scheduling, crashes, etc.)
+    
+    IMPORTANT: Always include ALL relevant findings in your response. 
+    The supervisor depends on your complete answer.
+    """
+)
+
+# Prometheus Specialist Agent
+prometheus_agent = create_agent(
+    model=llm,
+    tools=prometheus_tools,
+    system_prompt="""You are a Prometheus metrics expert. You help analyze 
+    cluster performance, resource usage, and stability metrics.
+    
+    Your tools:
+    - get_cluster_health: Quick health overview
+    - get_pod_cpu_memory: Find resource-hungry pods
+    - get_pod_restarts: Find unstable/crashing pods
+    - prometheus_query: Run custom PromQL queries
+    
+    IMPORTANT: Always include ALL relevant findings in your response.
+    The supervisor depends on your complete answer.
+    """
 )
 
 
-def ask_agent(query: str) -> str:
-    """Run a query and stream the message flow."""
+# Supervisor Agent that uses both specialists
+class AgentQueryInput(BaseModel):
+    request: str = Field(..., description="The question or task to delegate to this agent")
+
+
+def run_agent(agent, request: str) -> str:
+    """Helper to run an agent and extract its final response."""
+    result = agent.invoke({"messages": [{"role": "user", "content": request}]})
+
+    # Get the last AI message with content
+    for msg in reversed(result.get("messages", [])):
+        if hasattr(msg, 'content') and msg.content:
+            if hasattr(msg, 'type') and msg.type == 'ai':
+                if not (hasattr(msg, 'tool_calls') and msg.tool_calls and not msg.content):
+                    return msg.content
+    return "No response from agent."
+
+
+@tool(args_schema=AgentQueryInput)
+def ask_kubernetes_expert(request: str) -> str:
+    """
+    Delegate a question to the Kubernetes Specialist Agent.
+
+    Use this for questions about:
+    - Pod status, health, and restarts
+    - Container logs and errors
+    - Kubernetes events and warnings
+    - Namespace and resource structure
+    - Deployment issues
+
+    Example: "Check if any pods are crashing in the monitoring-system namespace"
+    """
+    return run_agent(kubernetes_agent, request)
+
+
+@tool(args_schema=AgentQueryInput)
+def ask_metrics_expert(request: str) -> str:
+    """
+    Delegate a question to the Prometheus Specialist Agent.
+
+    Use this for questions about:
+    - CPU and memory usage
+    - Resource consumption trends
+    - Pod restart counts and stability
+    - Cluster health overview
+    - Performance metrics
+
+    Example: "Which pods are using the most CPU right now?"
+    """
+    return run_agent(prometheus_agent, request)
+
+
+# Agent tools for supervisor
+agent_tools = [ask_kubernetes_expert, ask_metrics_expert]
+
+supervisor_agent = create_agent(
+    model=llm,
+    tools=agent_tools,
+    system_prompt="""You are a Kubernetes troubleshooting supervisor. You coordinate 
+    specialist agents to diagnose cluster issues.
+    
+    YOUR TEAM:
+    1. ask_kubernetes_expert - For pod status, logs, events, and K8s resources
+    2. ask_metrics_expert - For CPU/memory usage, restarts, and performance metrics
+    
+    WORKFLOW:
+    1. Understand what the user is asking
+    2. Decide which expert(s) to consult
+    3. Delegate specific questions to the right expert
+    4. Synthesize their findings into a clear answer
+    
+    GUIDELINES:
+    - For general health checks: Start with metrics expert for overview
+    - For specific pod issues: Use K8s expert for logs/events, metrics expert for resources
+    - For performance issues: Use metrics expert first, then K8s for details
+    - You can consult BOTH experts if needed for a complete picture
+    
+    RESPONSE FORMAT:
+    - Summarize findings clearly
+    - Highlight any issues found (⚠️ warnings, ❌ errors)
+    - Provide actionable recommendations
+    - NEVER try to fix things automatically
+    
+    Be concise but thorough."""
+)
+
+
+def ask_supervisor(query: str, verbose: bool = True) -> str:
+    """Run a query through the supervisor with streaming output."""
+    if verbose:
+        print(f"\n{'=' * 60}")
+        print(f"🧑 USER: {query}")
+        print("=" * 60)
+
     final_response = ""
 
-    for step in agent.stream(
+    for step in supervisor_agent.stream(
             {"messages": [{"role": "user", "content": query}]}
     ):
         for update in step.values():
             for message in update.get("messages", []):
                 message.pretty_print()
 
-                # Capture the final AI response
                 if hasattr(message, 'content') and message.content:
                     if hasattr(message, 'type') and message.type == 'ai':
                         if not (hasattr(message, 'tool_calls') and message.tool_calls):
@@ -627,19 +694,20 @@ def ask_agent(query: str) -> str:
     return final_response
 
 
-# Test queries that use the new observability tools
 test_queries = [
-    "Give me a quick health check of the cluster",
-    "Are there any pods with high restart counts?",
-    "Check for any errors in the logging-system namespace",
-]
+    # Should route to metrics expert
+    "Give me a health check of the cluster",
 
-# Only run tests if we have connectivity
-print("\nRunning test queries...\n")
+    # Should route to K8s expert
+    "What pods are running in the monitoring-system namespace?",
+
+    # May need both experts
+    "Are there any problems with pods in the logging-system namespace? Check both status and metrics.",
+]
 
 for query in test_queries:
     try:
-        ask_agent(query)
+        ask_supervisor(query)
     except Exception as e:
-        print(f"Error running query: {e}")
-    time.sleep(1)
+        print(f"Error: {e}")
+    time.sleep(2)  # Avoid rate limits
