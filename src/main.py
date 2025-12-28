@@ -7,6 +7,7 @@ from kubernetes import config, client
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from langchain_openai import AzureChatOpenAI
+from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel, Field
 
 # Load environment variables
@@ -638,6 +639,9 @@ def ask_metrics_expert(request: str) -> str:
 # Agent tools for supervisor
 agent_tools = [ask_kubernetes_expert, ask_metrics_expert]
 
+# Create checkpointer for memory
+supervisor_checkpointer = InMemorySaver()
+
 supervisor_agent = create_agent(
     model=llm,
     tools=agent_tools,
@@ -666,21 +670,27 @@ supervisor_agent = create_agent(
     - Provide actionable recommendations
     - NEVER try to fix things automatically
     
-    Be concise but thorough."""
+    Be concise but thorough. 
+    IMPORTANT: Remember our conversation context!
+    When delegating to specialists, include relevant context from our discussion.""",
+    checkpointer=supervisor_checkpointer
 )
 
 
-def ask_supervisor(query: str, verbose: bool = True) -> str:
+def ask_supervisor(query: str, thread_id: str = "default", verbose: bool = True) -> str:
     """Run a query through the supervisor with streaming output."""
+    config = {"configurable": {"thread_id": thread_id}}
+
     if verbose:
         print(f"\n{'=' * 60}")
-        print(f"🧑 USER: {query}")
+        print(f"🧑🧑🧑 USER: {query}")
         print("=" * 60)
 
     final_response = ""
 
     for step in supervisor_agent.stream(
-            {"messages": [{"role": "user", "content": query}]}
+            {"messages": [{"role": "user", "content": query}]},
+            config=config
     ):
         for update in step.values():
             for message in update.get("messages", []):
@@ -695,14 +705,14 @@ def ask_supervisor(query: str, verbose: bool = True) -> str:
 
 
 test_queries = [
-    # Should route to metrics expert
-    "Give me a health check of the cluster",
+    # First query sets context
+    "Check pods in the kube-system namespace",
 
-    # Should route to K8s expert
-    "What pods are running in the monitoring-system namespace?",
+    # Follow-up should remember namespace
+    "Which one has the most restarts?",
 
-    # May need both experts
-    "Are there any problems with pods in the logging-system namespace? Check both status and metrics.",
+    # Another follow-up
+    "Show me its logs",
 ]
 
 for query in test_queries:
