@@ -8,11 +8,15 @@ This module provides tools for querying Prometheus:
 - get_cluster_health: Get overall cluster health
 """
 
+import logging
+
 import requests
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from kube_medic.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -29,18 +33,21 @@ def query_prometheus(promql: str) -> dict:
     Returns:
         Dict containing the Prometheus API response
     """
+    logger.debug(f"Querying Prometheus: {promql[:60]}...")
     settings = get_settings()
 
     try:
         response = requests.get(
             f"{settings.prometheus_url}/api/v1/query",
             params={"query": promql},
-            timeout=10,
+            timeout=settings.prometheus_timeout,
         )
         response.raise_for_status()
+        logger.debug(f"Prometheus query successful, status: {response.status_code}")
         return response.json()
 
     except requests.exceptions.RequestException as e:
+        logger.error(f"Prometheus query failed: {e}")
         return {"status": "error", "error": str(e)}
 
 
@@ -95,7 +102,8 @@ def prometheus_query(query: str) -> str:
 
     lines = [f"Query: {query}\nResults ({len(results)} series):\n"]
 
-    for r in results[:20]:  # Limit to 20 results
+    max_results = settings.prometheus_max_series_results
+    for r in results[:max_results]:
         metric = r.get("metric", {})
         value = r.get("value", [None, None])
 
@@ -105,8 +113,8 @@ def prometheus_query(query: str) -> str:
 
         lines.append(f"  {metric_name}{{{labels}}}: {value[1]}")
 
-    if len(results) > 20:
-        lines.append(f"  ... and {len(results) - 20} more results")
+    if len(results) > max_results:
+        lines.append(f"  ... and {len(results) - max_results} more results")
 
     return "\n".join(lines)
 

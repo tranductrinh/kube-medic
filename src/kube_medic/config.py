@@ -20,7 +20,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Required settings (no defaults = must be set)
+    # =========================================================================
+    # REQUIRED SETTINGS (no defaults = must be set)
+    # =========================================================================
     azure_openai_endpoint: str = Field(
         ...,
         description="Azure OpenAI endpoint URL",
@@ -38,6 +40,62 @@ class Settings(BaseSettings):
         description="Prometheus server URL",
     )
 
+    # =========================================================================
+    # LLM CONFIGURATION
+    # =========================================================================
+    azure_openai_api_version: str = Field(
+        default="2024-08-01-preview",
+        description="Azure OpenAI API version",
+    )
+    llm_temperature: float = Field(
+        default=0.0,
+        description="LLM temperature for response generation (0=deterministic, 1=creative)",
+        ge=0.0,
+        le=2.0,
+    )
+    llm_max_tokens: int = Field(
+        default=2048,
+        description="Maximum tokens in LLM response",
+        gt=0,
+    )
+
+    # =========================================================================
+    # PROMETHEUS CONFIGURATION
+    # =========================================================================
+    prometheus_timeout: int = Field(
+        default=10,
+        description="Timeout in seconds for Prometheus API requests",
+        gt=0,
+    )
+    prometheus_max_series_results: int = Field(
+        default=20,
+        description="Maximum number of time series to return from Prometheus queries",
+        gt=0,
+    )
+
+    # =========================================================================
+    # KUBERNETES CONFIGURATION
+    # =========================================================================
+    k8s_logs_tail_lines: int = Field(
+        default=50,
+        description="Number of log lines to retrieve from pod logs",
+        gt=0,
+    )
+    k8s_logs_max_chars: int = Field(
+        default=3000,
+        description="Maximum characters to keep when truncating pod logs",
+        gt=0,
+    )
+
+    # =========================================================================
+    # TEXT FORMATTING
+    # =========================================================================
+    text_truncate_max_length: int = Field(
+        default=500,
+        description="Default maximum length for text truncation",
+        gt=0,
+    )
+
     @field_validator("prometheus_url", "azure_openai_endpoint")
     @classmethod
     def remove_trailing_slash(cls, v: str) -> str:
@@ -53,10 +111,14 @@ def get_settings() -> Settings:
 
 # Quick test
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     try:
         settings = get_settings()
-        print("Settings loaded!")
-        print(f"   Endpoint: {settings.azure_openai_endpoint}")
-        print(f"   Prometheus: {settings.prometheus_url}")
+        logger.info("Settings loaded!")
+        logger.info(f"Endpoint: {settings.azure_openai_endpoint}")
+        logger.info(f"Prometheus: {settings.prometheus_url}")
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")

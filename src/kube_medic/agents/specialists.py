@@ -8,12 +8,17 @@ This module defines the specialist agents:
 These agents are "workers" that the supervisor delegates to.
 """
 
+import logging
+
 from langchain.agents import create_agent
+from langchain_core.runnables import Runnable
 from langchain_openai import AzureChatOpenAI
 
 from kube_medic.config import get_settings
 from kube_medic.tools.kubernetes import kubernetes_tools
 from kube_medic.tools.prometheus import prometheus_tools
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -33,19 +38,22 @@ def get_llm() -> AzureChatOpenAI:
     global _llm_instance
 
     if _llm_instance is not None:
+        logger.debug("Reusing existing LLM instance")
         return _llm_instance
 
+    logger.info("Initializing LLM instance...")
     settings = get_settings()
 
     _llm_instance = AzureChatOpenAI(
         azure_endpoint=settings.azure_openai_endpoint,
         api_key=settings.azure_openai_api_key,
         azure_deployment=settings.azure_openai_deployment_name,
-        api_version="2024-08-01-preview",
-        temperature=0,
-        max_tokens=2048,
+        api_version=settings.azure_openai_api_version,
+        temperature=settings.llm_temperature,
+        max_tokens=settings.llm_max_tokens,
     )
 
+    logger.info(f"LLM initialized (temp={settings.llm_temperature}, max_tokens={settings.llm_max_tokens})")
     return _llm_instance
 
 
@@ -86,7 +94,7 @@ The supervisor depends on your complete answer."""
 # =============================================================================
 # Using factory functions (not global variables) so agents are created on-demand.
 
-def create_kubernetes_agent():
+def create_kubernetes_agent() -> Runnable:
     """
     Create the Kubernetes specialist agent.
 
@@ -99,16 +107,19 @@ def create_kubernetes_agent():
     Returns:
         A LangChain agent configured for K8s troubleshooting
     """
+    logger.info("Creating Kubernetes specialist agent...")
     llm = get_llm()
 
-    return create_agent(
+    agent = create_agent(
         model=llm,
         tools=kubernetes_tools,
         system_prompt=KUBERNETES_SYSTEM_PROMPT,
     )
+    logger.info(f"Kubernetes agent created with {len(kubernetes_tools)} tools")
+    return agent
 
 
-def create_prometheus_agent():
+def create_prometheus_agent() -> Runnable:
     """
     Create the Prometheus specialist agent.
 
@@ -121,10 +132,13 @@ def create_prometheus_agent():
     Returns:
         A LangChain agent configured for metrics analysis
     """
+    logger.info("Creating Prometheus specialist agent...")
     llm = get_llm()
 
-    return create_agent(
+    agent = create_agent(
         model=llm,
         tools=prometheus_tools,
         system_prompt=PROMETHEUS_SYSTEM_PROMPT,
     )
+    logger.info(f"Prometheus agent created with {len(prometheus_tools)} tools")
+    return agent

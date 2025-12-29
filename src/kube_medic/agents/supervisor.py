@@ -5,15 +5,20 @@ This module defines the supervisor agent that coordinates specialist agents
 and maintains conversation memory.
 """
 
+import logging
+
 from kube_medic.agents.specialists import (
     create_kubernetes_agent,
     create_prometheus_agent,
     get_llm,
 )
 from langchain.agents import create_agent
+from langchain_core.runnables import Runnable
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -44,6 +49,7 @@ def run_agent(agent, request: str) -> str:
     Returns:
         The agent's final text response
     """
+    logger.debug(f"Running agent with request: {request[:50]}...")
     result = agent.invoke({"messages": [{"role": "user", "content": request}]})
 
     # Get the last AI message with content
@@ -51,8 +57,10 @@ def run_agent(agent, request: str) -> str:
         if hasattr(msg, 'content') and msg.content:
             if hasattr(msg, 'type') and msg.type == 'ai':
                 if not (hasattr(msg, 'tool_calls') and msg.tool_calls and not msg.content):
+                    logger.debug(f"Agent response obtained ({len(msg.content)} chars)")
                     return msg.content
 
+    logger.warning("No response from agent")
     return "No response from agent."
 
 
@@ -95,7 +103,7 @@ When delegating to specialists, include relevant context from our discussion."""
 # SUPERVISOR FACTORY
 # =============================================================================
 
-def create_supervisor_agent(use_memory: bool = True):
+def create_supervisor_agent(use_memory: bool = True) -> Runnable:
     """
     Create the supervisor agent with optional memory.
 
@@ -110,9 +118,11 @@ def create_supervisor_agent(use_memory: bool = True):
     Returns:
         The configured supervisor agent
     """
+    logger.info("Creating supervisor agent...")
     llm = get_llm()
 
     # Create specialist agents
+    logger.debug("Initializing specialist agents...")
     kubernetes_agent = create_kubernetes_agent()
     prometheus_agent = create_prometheus_agent()
 
@@ -135,6 +145,7 @@ def create_supervisor_agent(use_memory: bool = True):
 
         Example: "Check if any pods are crashing in the monitoring-system namespace"
         """
+        logger.debug("Delegating to Kubernetes expert")
         return run_agent(kubernetes_agent, request)
 
     @tool(args_schema=AgentQueryInput)
@@ -151,6 +162,7 @@ def create_supervisor_agent(use_memory: bool = True):
 
         Example: "Which pods are using the most CPU right now?"
         """
+        logger.debug("Delegating to Prometheus expert")
         return run_agent(prometheus_agent, request)
 
     # Agent tools for supervisor
@@ -158,11 +170,14 @@ def create_supervisor_agent(use_memory: bool = True):
 
     # Create checkpointer for memory (if enabled)
     checkpointer = InMemorySaver() if use_memory else None
+    logger.info(f"Memory enabled: {use_memory}")
 
     # Create supervisor agent
-    return create_agent(
+    supervisor = create_agent(
         model=llm,
         tools=agent_tools,
         system_prompt=SUPERVISOR_SYSTEM_PROMPT,
         checkpointer=checkpointer,
     )
+    logger.info("Supervisor agent created successfully")
+    return supervisor

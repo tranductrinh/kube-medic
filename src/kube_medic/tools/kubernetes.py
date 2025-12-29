@@ -9,10 +9,16 @@ This module provides tools for interacting with the Kubernetes API:
 - get_events: Get Kubernetes events
 """
 
+import logging
+
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+
+from kube_medic.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -31,19 +37,26 @@ def get_k8s_client() -> client.CoreV1Api:
     global _v1_client
 
     if _v1_client is not None:
+        logger.debug("Reusing existing Kubernetes API client")
         return _v1_client
+
+    logger.info("Initializing Kubernetes API client...")
 
     # Try kubeconfig first (local development)
     try:
         config.load_kube_config()
+        logger.info("Loaded kubeconfig from local filesystem")
     except config.ConfigException:
         # Fall back to in-cluster config (running in K8s)
         try:
             config.load_incluster_config()
+            logger.info("Loaded in-cluster Kubernetes configuration")
         except config.ConfigException as e:
+            logger.error("Could not load Kubernetes configuration")
             raise RuntimeError("Could not load Kubernetes configuration") from e
 
     _v1_client = client.CoreV1Api()
+    logger.info("Kubernetes API client initialized successfully")
     return _v1_client
 
 
@@ -87,8 +100,8 @@ class GetPodLogsInput(BaseModel):
         description="Container name (required if pod has multiple containers)"
     )
     tail_lines: int = Field(
-        default=50,
-        description="Number of log lines to retrieve from the end"
+        default=None,
+        description="Number of log lines to retrieve from the end (uses config default if not specified)"
     )
 
 
@@ -116,12 +129,15 @@ def list_namespaces() -> str:
     Use this to understand the structure of the cluster.
     """
     try:
+        logger.info("Listing namespaces...")
         v1 = get_k8s_client()
         namespaces = v1.list_namespace()
 
         if not namespaces.items:
+            logger.warning("No namespaces found in cluster")
             return "No namespaces found."
 
+        logger.info(f"Found {len(namespaces.items)} namespaces")
         lines = [f"Found {len(namespaces.items)} namespaces:\n"]
         for ns in namespaces.items:
             status = ns.status.phase
@@ -130,6 +146,7 @@ def list_namespaces() -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing namespaces: {e}", exc_info=True)
         return f"Error listing namespaces: {e}"
 
 
@@ -142,6 +159,7 @@ def list_pods(namespace: str = "", label_selector: str = "") -> str:
     Returns a summary of pods including name, namespace, status, and restarts.
     """
     try:
+        logger.info(f"Listing pods (namespace={namespace or 'all'}, selector={label_selector or 'none'})")
         v1 = get_k8s_client()
 
         if namespace:
@@ -155,8 +173,10 @@ def list_pods(namespace: str = "", label_selector: str = "") -> str:
             )
 
         if not pods.items:
+            logger.warning("No pods found")
             return "No pods found."
 
+        logger.info(f"Found {len(pods.items)} pods")
         lines = [f"Found {len(pods.items)} pods:\n"]
 
         for pod in pods.items:
@@ -244,7 +264,7 @@ def get_pod_logs(
         pod_name: str,
         namespace: str = "default",
         container: str = "",
-        tail_lines: int = 50
+        tail_lines: int = None
 ) -> str:
     """
     Get logs from a Kubernetes pod.
@@ -253,6 +273,15 @@ def get_pod_logs(
     Returns the last N lines of logs from the specified pod/container.
     """
     try:
+        logger.info(f"Getting logs for pod {namespace}/{pod_name}")
+        settings = get_settings()
+
+        # Use config default if not specified
+        if tail_lines is None:
+            tail_lines = settings.k8s_logs_tail_lines
+
+        logger.debug(f"Tail lines: {tail_lines}, container: {container or 'default'}")
+
         v1 = get_k8s_client()
 
         kwargs = {
@@ -266,19 +295,28 @@ def get_pod_logs(
         logs = v1.read_namespaced_pod_log(**kwargs)
 
         if not logs:
+            logger.warning(f"No logs found for {namespace}/{pod_name}")
             return f"No logs found for pod {pod_name}"
 
+        logger.info(f"Retrieved {len(logs)} characters of logs")
+
         # Truncate if too long (LLM context limits)
-        max_chars = 3000
+        max_chars = settings.k8s_logs_max_chars
         if len(logs) > max_chars:
+            logger.debug(f"Truncating logs from {len(logs)} to {max_chars} chars")
             logs = f"[...truncated...]\n{logs[-max_chars:]}"
 
         return f"Logs from {namespace}/{pod_name} (last {tail_lines} lines):\n\n{logs}"
 
     except ApiException as e:
         if e.status == 404:
+            logger.warning(f"Pod '{pod_name}' not found in namespace '{namespace}'")
             return f"Pod '{pod_name}' not found in namespace '{namespace}'"
+        logger.error(f"API error getting logs: {e}", exc_info=True)
         return f"Error getting logs: {e.reason}"
+    except Exception as e:
+        logger.error(f"Error getting pod logs: {e}", exc_info=True)
+        return f"Error: {e}"
     except Exception as e:
         return f"Error: {e}"
 

@@ -2,6 +2,12 @@
 Helper functions for interacting with agents.
 """
 
+import logging
+
+from kube_medic.config import get_settings
+
+logger = logging.getLogger(__name__)
+
 
 def ask_agent(agent, query: str, thread_id: str = "default") -> str:
     """
@@ -15,6 +21,7 @@ def ask_agent(agent, query: str, thread_id: str = "default") -> str:
     Returns:
         The agent's final text response
     """
+    logger.debug(f"Query thread {thread_id}: {query[:50]}...")
     config = {"configurable": {"thread_id": thread_id}}
 
     result = agent.invoke(
@@ -27,8 +34,10 @@ def ask_agent(agent, query: str, thread_id: str = "default") -> str:
         if hasattr(msg, 'content') and msg.content:
             if hasattr(msg, 'type') and msg.type == 'ai':
                 if not (hasattr(msg, 'tool_calls') and msg.tool_calls and not msg.content):
+                    logger.debug(f"Response received from agent ({len(msg.content)} chars)")
                     return msg.content
 
+    logger.warning(f"No response from agent for thread {thread_id}")
     return "No response from agent."
 
 
@@ -41,6 +50,7 @@ def stream_agent(
     """
     Stream agent responses with real-time output.
     """
+    logger.debug(f"Streaming response for thread {thread_id}")
     config = {"configurable": {"thread_id": thread_id}}
 
     if verbose:
@@ -64,16 +74,24 @@ def stream_agent(
                         if not (hasattr(message, 'tool_calls') and message.tool_calls):
                             final_response = message.content
 
+    logger.debug(f"Stream completed for thread {thread_id}")
     return final_response
 
 
 def format_error(error: Exception) -> str:
     """Format an error message for display."""
+    logger.debug(f"Formatting error: {type(error).__name__}")
     return f"❌ Error: {type(error).__name__}: {error}"
 
 
-def truncate_text(text: str, max_length: int = 500) -> str:
+def truncate_text(text: str, max_length: int = None) -> str:
     """Truncate text to a maximum length."""
+    if max_length is None:
+        settings = get_settings()
+        max_length = settings.text_truncate_max_length
+
     if len(text) <= max_length:
         return text
+
+    logger.debug(f"Truncating text from {len(text)} to {max_length} chars")
     return text[:max_length] + "..."
