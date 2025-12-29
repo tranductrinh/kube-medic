@@ -88,3 +88,26 @@ python -m kube_medic.main
 "What's using the most CPU?"
 "Are there any errors in the events?"
 ```
+
+## Running Tests
+
+```bash
+# Unit tests only
+./run_tests.sh unit
+
+# Integration tests (requires .env + services)
+./run_tests.sh integration
+
+# All tests
+./run_tests.sh all
+
+# Specific component
+./run_tests.sh config      # Configuration tests
+./run_tests.sh logging     # Logging tests
+./run_tests.sh k8s         # Kubernetes tools tests
+./run_tests.sh prom        # Prometheus tools tests
+
+# With coverage report
+./run_tests.sh coverage
+```
+

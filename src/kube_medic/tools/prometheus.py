@@ -102,6 +102,7 @@ def prometheus_query(query: str) -> str:
 
     lines = [f"Query: {query}\nResults ({len(results)} series):\n"]
 
+    settings = get_settings()
     max_results = settings.prometheus_max_series_results
     for r in results[:max_results]:
         metric = r.get("metric", {})
