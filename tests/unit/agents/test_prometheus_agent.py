@@ -24,9 +24,6 @@ class TestPrometheusSystemPrompt:
         from kube_medic.agents.prometheus_agent import PROMETHEUS_SYSTEM_PROMPT
 
         expected_tools = [
-            "get_cluster_health",
-            "get_pod_cpu_memory",
-            "get_pod_restarts",
             "prometheus_query",
             "prometheus_query_range",
         ]
@@ -146,16 +143,13 @@ class TestPrometheusToolsIntegration:
         """Test that prometheus_tools has expected number of tools."""
         from kube_medic.tools.prometheus import prometheus_tools
 
-        assert len(prometheus_tools) == 5
+        assert len(prometheus_tools) == 2
 
     def test_prometheus_tools_have_names(self) -> None:
         """Test that all prometheus tools have proper names."""
         from kube_medic.tools.prometheus import prometheus_tools
 
         expected_names = [
-            "get_cluster_health",
-            "get_pod_cpu_memory",
-            "get_pod_restarts",
             "prometheus_query",
             "prometheus_query_range",
         ]

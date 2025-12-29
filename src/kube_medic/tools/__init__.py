@@ -18,9 +18,6 @@ from kube_medic.tools.prometheus import (
     prometheus_tools,
     prometheus_query,
     prometheus_query_range,
-    get_pod_cpu_memory,
-    get_pod_restarts,
-    get_cluster_health,
 )
 
 __all__ = [
@@ -35,7 +32,4 @@ __all__ = [
     "prometheus_tools",
     "prometheus_query",
     "prometheus_query_range",
-    "get_pod_cpu_memory",
-    "get_pod_restarts",
-    "get_cluster_health",
 ]

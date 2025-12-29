@@ -24,7 +24,7 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 │    K8s    │     │  Prometheus  │
 │   Agent   │     │   Agent      │
 │           │     │              │
-│ 5 tools   │     │ 5 tools      │
+│ 5 tools   │     │ 2 tools      │
 └───────────┘     └──────────────┘
 ```
 
@@ -42,10 +42,7 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 
 | Tool | Description |
 |------|-------------|
-| `get_cluster_health` | Quick cluster health overview (pod status, node readiness) |
-| `get_pod_cpu_memory` | Get CPU and memory usage for pods |
-| `get_pod_restarts` | Find pods with high restart counts |
-| `prometheus_query` | Execute custom PromQL instant queries |
+| `prometheus_query` | Execute PromQL instant queries |
 | `prometheus_query_range` | Execute PromQL range queries for trend analysis |
 
 ## Prerequisites

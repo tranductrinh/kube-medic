@@ -1,5 +1,5 @@
 """
-Kubernetes Specialist Agents: Handles pod, log, and event queries
+Kubernetes Agent: Handles pod, log, and event queries
 This agent is "workers" that the supervisor delegates to.
 """
 

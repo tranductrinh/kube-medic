@@ -1,5 +1,5 @@
 """
-Prometheus Specialist Agents: Handles metrics and health queries
+Prometheus Agent: Handles metrics and health queries
 This agent is "workers" that the supervisor delegates to.
 """
 
@@ -18,14 +18,11 @@ logger = get_logger(__name__)
 # Keeping prompts as constants makes them easy to find and modify.
 
 PROMETHEUS_SYSTEM_PROMPT = """You are a Prometheus metrics expert. You help analyze 
-cluster performance, resource usage, and stability metrics.
+cluster performance, resource usage, and stability metrics by using PromQL.
 
 Your tools:
-- get_cluster_health: Quick health overview
-- get_pod_cpu_memory: Find resource-hungry pods
-- get_pod_restarts: Find unstable/crashing pods
-- prometheus_query: Run custom PromQL instant queries
-- prometheus_query_range: Run custom PromQL range queries for trend analysis
+- prometheus_query: Run PromQL instant queries
+- prometheus_query_range: Run PromQL range queries for trend analysis
 
 IMPORTANT: Always include ALL relevant findings in your response.
 The supervisor depends on your complete answer."""

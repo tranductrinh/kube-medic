@@ -155,15 +155,6 @@ class TestIntegrationPrometheus:
         assert isinstance(result, dict)
         assert "status" in result
 
-    def test_get_cluster_health_returns_results(self) -> None:
-        """Test that get_cluster_health returns results."""
-        from kube_medic.tools.prometheus import get_cluster_health
-
-        result = get_cluster_health.invoke({})
-
-        assert isinstance(result, str)
-        assert len(result) > 0
-
     def test_prometheus_query_error_handling(self) -> None:
         """Test that Prometheus handles invalid queries gracefully."""
         from kube_medic.tools.prometheus import query_prometheus

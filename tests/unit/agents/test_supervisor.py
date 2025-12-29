@@ -179,11 +179,11 @@ class TestSupervisorSystemPrompt:
 
         assert "ask_kubernetes_expert" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_mentions_metrics_expert(self) -> None:
-        """Test that prompt mentions metrics expert."""
+    def test_prompt_mentions_prometheus_expert(self) -> None:
+        """Test that prompt mentions Prometheus expert."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "ask_metrics_expert" in SUPERVISOR_SYSTEM_PROMPT
+        assert "ask_prometheus_expert" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_describes_workflow(self) -> None:
         """Test that prompt describes the workflow."""
@@ -504,7 +504,7 @@ class TestSupervisorToolDelegation:
             mock_create_agent,
             mock_saver,
     ) -> None:
-        """Test that ask_metrics_expert delegates to prometheus agent."""
+        """Test that ask_prometheus_expert delegates to prometheus agent."""
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
 
@@ -523,7 +523,7 @@ class TestSupervisorToolDelegation:
 
         create_supervisor_agent()
 
-        # Get the ask_metrics_expert tool
+        # Get the ask_prometheus_expert tool
         call_kwargs = mock_create_agent.call_args[1]
         tools = call_kwargs["tools"]
         prom_tool = next(t for t in tools if t.name == "ask_prometheus_expert")
