@@ -9,6 +9,7 @@ from kube_medic.utils.helpers import (
     stream_agent,
     format_error,
     truncate_text,
+    get_llm
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "stream_agent",
     "format_error",
     "truncate_text",
+    "get_llm"
 ]

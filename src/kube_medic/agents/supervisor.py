@@ -5,18 +5,16 @@ This module defines the supervisor agent that coordinates specialist agents
 and maintains conversation memory.
 """
 
-from kube_medic.agents.specialists import (
-    create_kubernetes_agent,
-    create_prometheus_agent,
-    get_llm,
-)
-from kube_medic.logging_config import get_logger
-
 from langchain.agents import create_agent
 from langchain_core.runnables import Runnable
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel, Field
+
+from kube_medic.agents.kubernetes_agent import create_kubernetes_agent
+from kube_medic.agents.prometheus_agent import create_prometheus_agent
+from kube_medic.logging_config import get_logger
+from kube_medic.utils.helpers import get_llm
 
 logger = get_logger(__name__)
 

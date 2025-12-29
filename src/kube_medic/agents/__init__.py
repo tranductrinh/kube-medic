@@ -10,17 +10,12 @@ Usage:
 
     agent = create_supervisor_agent()
 """
-
-from kube_medic.agents.specialists import (
-    create_kubernetes_agent,
-    create_prometheus_agent,
-    get_llm,
-)
+from kube_medic.agents.kubernetes_agent import create_kubernetes_agent
+from kube_medic.agents.prometheus_agent import create_prometheus_agent
 from kube_medic.agents.supervisor import create_supervisor_agent
 
 __all__ = [
     "create_kubernetes_agent",
     "create_prometheus_agent",
     "create_supervisor_agent",
-    "get_llm",
 ]

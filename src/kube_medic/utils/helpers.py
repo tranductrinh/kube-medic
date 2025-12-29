@@ -1,11 +1,48 @@
 """
-Helper functions for interacting with agents.
+Helper functions.
 """
+
+from langchain_openai import AzureChatOpenAI
 
 from kube_medic.config import get_settings
 from kube_medic.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+# =============================================================================
+# LLM FACTORY (Singleton Pattern)
+# =============================================================================
+
+_llm_instance: AzureChatOpenAI | None = None
+
+
+def get_llm() -> AzureChatOpenAI:
+    """
+    Get or create the LLM instance.
+
+    Uses singleton pattern - only creates LLM once.
+    All agents share the same LLM instance.
+    """
+    global _llm_instance
+
+    if _llm_instance is not None:
+        logger.debug("Reusing existing LLM instance")
+        return _llm_instance
+
+    logger.info("Initializing LLM instance...")
+    settings = get_settings()
+
+    _llm_instance = AzureChatOpenAI(
+        azure_endpoint=settings.azure_openai_endpoint,
+        api_key=settings.azure_openai_api_key,
+        azure_deployment=settings.azure_openai_deployment_name,
+        api_version=settings.azure_openai_api_version,
+        temperature=settings.llm_temperature,
+        max_tokens=settings.llm_max_tokens,
+    )
+
+    logger.info(f"LLM initialized (temp={settings.llm_temperature}, max_tokens={settings.llm_max_tokens})")
+    return _llm_instance
 
 
 def ask_agent(agent, query: str, thread_id: str = "default") -> str:
