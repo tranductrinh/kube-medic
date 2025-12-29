@@ -9,17 +9,15 @@ This module provides tools for interacting with the Kubernetes API:
 - get_events: Get Kubernetes events
 """
 
-import logging
-
-from kubernetes import client, config
+from kube_medic.config import get_settings
+from kube_medic.logging_config import get_logger
 from kubernetes.client.exceptions import ApiException
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from kube_medic.config import get_settings
+from kubernetes import client, config
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 
 # =============================================================================
 # KUBERNETES CLIENT (Singleton Pattern)
@@ -316,8 +314,6 @@ def get_pod_logs(
         return f"Error getting logs: {e.reason}"
     except Exception as e:
         logger.error(f"Error getting pod logs: {e}", exc_info=True)
-        return f"Error: {e}"
-    except Exception as e:
         return f"Error: {e}"
 
 

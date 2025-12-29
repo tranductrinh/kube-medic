@@ -2,11 +2,10 @@
 Helper functions for interacting with agents.
 """
 
-import logging
-
 from kube_medic.config import get_settings
+from kube_medic.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def ask_agent(agent, query: str, thread_id: str = "default") -> str:
@@ -54,7 +53,7 @@ def stream_agent(
     config = {"configurable": {"thread_id": thread_id}}
 
     if verbose:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"🧑 USER: {query}")
         print("=" * 60)
 

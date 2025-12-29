@@ -8,18 +8,15 @@ This module defines the specialist agents:
 These agents are "workers" that the supervisor delegates to.
 """
 
-import logging
-
+from kube_medic.config import get_settings
+from kube_medic.logging_config import get_logger
+from kube_medic.tools.kubernetes import kubernetes_tools
+from kube_medic.tools.prometheus import prometheus_tools
 from langchain.agents import create_agent
 from langchain_core.runnables import Runnable
 from langchain_openai import AzureChatOpenAI
 
-from kube_medic.config import get_settings
-from kube_medic.tools.kubernetes import kubernetes_tools
-from kube_medic.tools.prometheus import prometheus_tools
-
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 
 # =============================================================================
 # LLM FACTORY (Singleton Pattern)
@@ -74,7 +71,6 @@ Your tools:
 
 IMPORTANT: Always include ALL relevant findings in your response. 
 The supervisor depends on your complete answer."""
-
 
 PROMETHEUS_SYSTEM_PROMPT = """You are a Prometheus metrics expert. You help analyze 
 cluster performance, resource usage, and stability metrics.

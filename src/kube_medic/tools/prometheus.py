@@ -8,15 +8,13 @@ This module provides tools for querying Prometheus:
 - get_cluster_health: Get overall cluster health
 """
 
-import logging
-
 import requests
+from kube_medic.config import get_settings
+from kube_medic.logging_config import get_logger
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from kube_medic.config import get_settings
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================

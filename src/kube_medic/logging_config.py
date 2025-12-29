@@ -23,8 +23,6 @@ import os
 import sys
 from pathlib import Path
 
-from kube_medic.config import get_settings
-
 
 # ============================================================================
 # LOGGING LEVEL HELPERS
@@ -93,9 +91,9 @@ def _get_config_from_env() -> tuple:
 # ============================================================================
 
 def setup_logging(
-    level: int = None,
-    log_file: str = None,
-    format_style: str = None,
+        level: int = None,
+        log_file: str = None,
+        format_style: str = None,
 ) -> None:
     """
     Configure logging for the application.
@@ -187,6 +185,7 @@ def log_execution(logger: logging.Logger):
         def my_function():
             pass
     """
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             logger.debug(f"Executing {func.__name__}")
@@ -197,7 +196,9 @@ def log_execution(logger: logging.Logger):
             except Exception as e:
                 logger.error(f"✗ {func.__name__} failed: {e}", exc_info=True)
                 raise
+
         return wrapper
+
     return decorator
 
 
@@ -217,4 +218,3 @@ if __name__ == "__main__":
     logger.info("This is an info message")
     logger.warning("This is a warning message")
     logger.error("This is an error message")
-
