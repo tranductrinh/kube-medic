@@ -2,6 +2,9 @@
 Helper functions.
 """
 
+import re
+from datetime import datetime, timedelta
+
 from langchain_openai import AzureChatOpenAI
 
 from kube_medic.config import get_settings
@@ -131,3 +134,39 @@ def truncate_text(text: str, max_length: int = None) -> str:
 
     logger.debug(f"Truncating text from {len(text)} to {max_length} chars")
     return text[:max_length] + "..."
+
+
+def parse_relative_time(time_str: str) -> datetime:
+    """
+    Parse relative time string to datetime.
+
+    Args:
+        time_str: Time string like '1h', '30m', '2d', 'now', or ISO timestamp
+
+    Returns:
+        datetime object
+    """
+    if time_str == "now":
+        return datetime.now()
+
+    # Try relative time (e.g., "1h", "30m", "2d")
+    match = re.match(r'^(\d+)([smhdw])$', time_str)
+    if match:
+        value = int(match.group(1))
+        unit = match.group(2)
+
+        unit_map = {
+            's': timedelta(seconds=value),
+            'm': timedelta(minutes=value),
+            'h': timedelta(hours=value),
+            'd': timedelta(days=value),
+            'w': timedelta(weeks=value),
+        }
+
+        return datetime.now() - unit_map[unit]
+
+    # Try ISO timestamp
+    try:
+        return datetime.fromisoformat(time_str)
+    except ValueError:
+        raise ValueError(f"Invalid time format: {time_str}. Use '1h', '30m', 'now', or ISO timestamp.")

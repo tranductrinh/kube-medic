@@ -3,10 +3,13 @@ Prometheus Metrics Tools.
 
 This module provides tools for querying Prometheus:
 - prometheus_query: Execute raw PromQL queries
+- prometheus_query_range: Execute raw PromQL range queries for trend analysis
 - get_pod_cpu_memory: Get CPU and memory usage for pods
 - get_pod_restarts: Get pod restart counts
 - get_cluster_health: Get overall cluster health
 """
+
+from datetime import datetime
 
 from langchain_core.tools import tool
 from prometheus_api_client import PrometheusConnect
@@ -14,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from kube_medic.config import get_settings
 from kube_medic.logging_config import get_logger
+from kube_medic.utils.helpers import parse_relative_time
 
 logger = get_logger(__name__)
 
@@ -76,6 +80,23 @@ class PrometheusQueryInput(BaseModel):
     query: str = Field(..., description="PromQL query to execute")
 
 
+class PrometheusRangeQueryInput(BaseModel):
+    """Input schema for Prometheus range queries."""
+    query: str = Field(..., description="PromQL query to execute")
+    start: str = Field(
+        default="1h",
+        description="Start time (e.g., '1h' for 1 hour ago, '30m' for 30 minutes ago, or ISO timestamp)"
+    )
+    end: str = Field(
+        default="now",
+        description="End time (e.g., 'now' or ISO timestamp)"
+    )
+    step: str = Field(
+        default="1m",
+        description="Query resolution step (e.g., '15s', '1m', '5m')"
+    )
+
+
 class PodMetricsInput(BaseModel):
     """Input schema for pod metrics queries."""
 
@@ -133,6 +154,83 @@ def prometheus_query(query: str) -> str:
         lines.append(f"  ... and {len(results) - max_results} more results")
 
     return "\n".join(lines)
+
+
+@tool(args_schema=PrometheusRangeQueryInput)
+def prometheus_query_range(
+        query: str,
+        start: str = "1h",
+        end: str = "now",
+        step: str = "1m"
+) -> str:
+    """
+    Execute a PromQL range query against Prometheus.
+    Use this to get metrics over a time period for trend analysis.
+
+    Examples:
+    - Query CPU over last hour: query="rate(container_cpu_usage_seconds_total[5m])", start="1h"
+    - Query memory over last day: query="container_memory_usage_bytes", start="1d", step="5m"
+    """
+    logger.debug(f"Range query: {query[:60]}... from {start} to {end}, step {step}")
+
+    try:
+        prom = get_prometheus_client()
+
+        start_time = parse_relative_time(start)
+        end_time = parse_relative_time(end)
+
+        result = prom.custom_query_range(
+            query=query,
+            start_time=start_time,
+            end_time=end_time,
+            step=step,
+        )
+
+        if not result:
+            return "No data returned for this range query."
+
+        lines = [f"Range Query: {query}"]
+        lines.append(f"Time Range: {start_time.isoformat()} to {end_time.isoformat()}")
+        lines.append(f"Step: {step}")
+        lines.append(f"Results ({len(result)} series):\n")
+
+        settings = get_settings()
+        max_results = settings.prometheus_max_series_results
+
+        for r in result[:max_results]:
+            metric = r.get("metric", {})
+            values = r.get("values", [])
+
+            # Format metric labels
+            labels = ", ".join(f'{k}="{v}"' for k, v in metric.items() if k != "__name__")
+            metric_name = metric.get("__name__", "unknown")
+
+            lines.append(f"  {metric_name}{{{labels}}}:")
+            lines.append(f"    Data points: {len(values)}")
+
+            if values:
+                # Show first, middle, and last values
+                first_ts, first_val = values[0]
+                last_ts, last_val = values[-1]
+                lines.append(f"    First: {datetime.fromtimestamp(first_ts).isoformat()} = {first_val}")
+                lines.append(f"    Last:  {datetime.fromtimestamp(last_ts).isoformat()} = {last_val}")
+
+                # Calculate simple stats
+                numeric_values = [float(v[1]) for v in values if v[1] != 'NaN']
+                if numeric_values:
+                    lines.append(
+                        f"    Min: {min(numeric_values):.3f}, Max: {max(numeric_values):.3f}, Avg: {sum(numeric_values) / len(numeric_values):.3f}")
+
+        if len(result) > max_results:
+            lines.append(f"\n  ... and {len(result) - max_results} more series")
+
+        return "\n".join(lines)
+
+    except ValueError as e:
+        return f"Invalid time format: {e}"
+    except Exception as e:
+        logger.error(f"Prometheus range query failed: {e}")
+        return f"Prometheus error: {e}"
 
 
 @tool(args_schema=PodMetricsInput)
@@ -298,6 +396,7 @@ def get_cluster_health() -> str:
 
 prometheus_tools = [
     prometheus_query,
+    prometheus_query_range,
     get_pod_cpu_memory,
     get_pod_restarts,
     get_cluster_health,

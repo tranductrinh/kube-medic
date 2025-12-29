@@ -24,7 +24,8 @@ Your tools:
 - get_cluster_health: Quick health overview
 - get_pod_cpu_memory: Find resource-hungry pods
 - get_pod_restarts: Find unstable/crashing pods
-- prometheus_query: Run custom PromQL queries
+- prometheus_query: Run custom PromQL instant queries
+- prometheus_query_range: Run custom PromQL range queries for trend analysis
 
 IMPORTANT: Always include ALL relevant findings in your response.
 The supervisor depends on your complete answer."""

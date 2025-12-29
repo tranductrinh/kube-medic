@@ -147,7 +147,7 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
         return run_agent(kubernetes_agent, request)
 
     @tool(args_schema=AgentQueryInput)
-    def ask_metrics_expert(request: str) -> str:
+    def ask_prometheus_expert(request: str) -> str:
         """
         Delegate a question to the Prometheus Specialist Agent.
 
@@ -164,7 +164,7 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
         return run_agent(prometheus_agent, request)
 
     # Agent tools for supervisor
-    agent_tools = [ask_kubernetes_expert, ask_metrics_expert]
+    agent_tools = [ask_kubernetes_expert, ask_prometheus_expert]
 
     # Create checkpointer for memory (if enabled)
     checkpointer = InMemorySaver() if use_memory else None

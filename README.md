@@ -13,20 +13,40 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 
 ```
 ┌─────────────────────────────────────────┐
-│           SUPERVISOR AGENT              │
+│          SUPERVISOR AGENT               │
 │   (Routes questions to specialists)     │
 │   (Has conversation memory)             │
 └─────────────┬───────────────────────────┘
               │
     ┌─────────┴─────────┐
     ▼                   ▼
-┌───────────┐     ┌───────────┐
-│    K8s    │     │  Metrics  │
-│   Agent   │     │   Agent   │
-│           │     │           │
-│ 5 tools   │     │ 4 tools   │
-└───────────┘     └───────────┘
+┌───────────┐     ┌──────────────┐
+│    K8s    │     │  Prometheus  │
+│   Agent   │     │   Agent      │
+│           │     │              │
+│ 5 tools   │     │ 5 tools      │
+└───────────┘     └──────────────┘
 ```
+
+### Kubernetes Agent Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_namespaces` | List all namespaces in the cluster |
+| `list_pods` | List pods with status and restart counts |
+| `get_pod_details` | Get detailed information about a specific pod |
+| `get_pod_logs` | Retrieve logs from a pod/container |
+| `get_events` | Get Kubernetes events (scheduling, crashes, etc.) |
+
+### Prometheus Agent Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_cluster_health` | Quick cluster health overview (pod status, node readiness) |
+| `get_pod_cpu_memory` | Get CPU and memory usage for pods |
+| `get_pod_restarts` | Find pods with high restart counts |
+| `prometheus_query` | Execute custom PromQL instant queries |
+| `prometheus_query_range` | Execute PromQL range queries for trend analysis |
 
 ## Prerequisites
 
