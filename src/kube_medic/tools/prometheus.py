@@ -8,18 +8,39 @@ This module provides tools for querying Prometheus:
 - get_cluster_health: Get overall cluster health
 """
 
-import requests
+from langchain_core.tools import tool
+from prometheus_api_client import PrometheusConnect
+from pydantic import BaseModel, Field
+
 from kube_medic.config import get_settings
 from kube_medic.logging_config import get_logger
-from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
 
+# =============================================================================
+# PROMETHEUS CLIENT (Singleton)
+# =============================================================================
 
-# =============================================================================
-# PROMETHEUS CLIENT
-# =============================================================================
+_prom_client: PrometheusConnect | None = None
+
+
+def get_prometheus_client() -> PrometheusConnect:
+    """Get or create the Prometheus client (singleton)."""
+    global _prom_client
+
+    if _prom_client is not None:
+        return _prom_client
+
+    settings = get_settings()
+    logger.info(f"Connecting to Prometheus at {settings.prometheus_url}")
+
+    _prom_client = PrometheusConnect(
+        url=settings.prometheus_url,
+        disable_ssl=True,
+    )
+
+    return _prom_client
+
 
 def query_prometheus(promql: str) -> dict:
     """
@@ -32,19 +53,15 @@ def query_prometheus(promql: str) -> dict:
         Dict containing the Prometheus API response
     """
     logger.debug(f"Querying Prometheus: {promql[:60]}...")
-    settings = get_settings()
 
     try:
-        response = requests.get(
-            f"{settings.prometheus_url}/api/v1/query",
-            params={"query": promql},
-            timeout=settings.prometheus_timeout,
-        )
-        response.raise_for_status()
-        logger.debug(f"Prometheus query successful, status: {response.status_code}")
-        return response.json()
+        prom = get_prometheus_client()
+        result = prom.custom_query(query=promql)
 
-    except requests.exceptions.RequestException as e:
+        logger.debug(f"Query returned {len(result)} results")
+        return {"status": "success", "data": {"result": result}}
+
+    except Exception as e:
         logger.error(f"Prometheus query failed: {e}")
         return {"status": "error", "error": str(e)}
 
