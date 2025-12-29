@@ -6,7 +6,7 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 
 - **Multi-Agent Architecture**: Supervisor coordinates specialist agents
 - **Kubernetes**: Query pods, logs, events, and more
-- **Prometheus**: CPU, memory, restart counts, and health checks
+- **Prometheus**: Query metrics via PromQL (instant and range queries)
 - **Conversation Memory**: Maintains context across questions
 
 ## Architecture
