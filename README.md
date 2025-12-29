@@ -24,19 +24,25 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 │    K8s    │     │  Prometheus  │
 │   Agent   │     │   Agent      │
 │           │     │              │
-│ 5 tools   │     │ 2 tools      │
+│ 11 tools  │     │ 2 tools      │
 └───────────┘     └──────────────┘
 ```
 
-### Kubernetes Agent Tools
+### Kubernetes Agent Tools (READ-ONLY)
 
 | Tool | Description |
 |------|-------------|
-| `list_namespaces` | List all namespaces in the cluster |
-| `list_pods` | List pods with status and restart counts |
+| `get_events` | Get Kubernetes events (scheduling, crashes, etc.) |
+| `get_node_details` | Get node capacity, conditions, and taints |
 | `get_pod_details` | Get detailed information about a specific pod |
 | `get_pod_logs` | Retrieve logs from a pod/container |
-| `get_events` | Get Kubernetes events (scheduling, crashes, etc.) |
+| `list_configmaps` | List ConfigMaps (keys only, not values) |
+| `list_deployments` | List deployments with replica status |
+| `list_namespaces` | List all namespaces in the cluster |
+| `list_nodes` | List cluster nodes with status |
+| `list_pods` | List pods with status and restart counts |
+| `list_secrets` | List Secret names (not values) |
+| `list_services` | List services with types and endpoints |
 
 ### Prometheus Agent Tools
 

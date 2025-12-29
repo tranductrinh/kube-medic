@@ -13,6 +13,12 @@ from kube_medic.tools.kubernetes import (
     get_pod_details,
     get_pod_logs,
     get_events,
+    list_deployments,
+    list_services,
+    list_nodes,
+    get_node_details,
+    list_configmaps,
+    list_secrets,
 )
 from kube_medic.tools.prometheus import (
     prometheus_tools,
@@ -28,6 +34,12 @@ __all__ = [
     "get_pod_details",
     "get_pod_logs",
     "get_events",
+    "list_deployments",
+    "list_services",
+    "list_nodes",
+    "get_node_details",
+    "list_configmaps",
+    "list_secrets",
     # Prometheus
     "prometheus_tools",
     "prometheus_query",

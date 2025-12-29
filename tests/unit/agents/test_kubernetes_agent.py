@@ -142,18 +142,24 @@ class TestKubernetesToolsIntegration:
         """Test that kubernetes_tools has expected number of tools."""
         from kube_medic.tools.kubernetes import kubernetes_tools
 
-        assert len(kubernetes_tools) == 5
+        assert len(kubernetes_tools) == 11
 
     def test_kubernetes_tools_have_names(self) -> None:
         """Test that all kubernetes tools have proper names."""
         from kube_medic.tools.kubernetes import kubernetes_tools
 
         expected_names = [
-            "list_namespaces",
-            "list_pods",
+            "get_events",
+            "get_node_details",
             "get_pod_details",
             "get_pod_logs",
-            "get_events",
+            "list_configmaps",
+            "list_deployments",
+            "list_namespaces",
+            "list_nodes",
+            "list_pods",
+            "list_secrets",
+            "list_services",
         ]
 
         tool_names = [t.name for t in kubernetes_tools]

@@ -692,6 +692,297 @@ class TestGetEvents:
         assert "Error getting events" in result
 
 
+class TestListDeployments:
+    """Tests for list_deployments tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_apps_client")
+    def test_returns_deployments(self, mock_get_client) -> None:
+        """Test list_deployments returns deployment info."""
+        mock_dep = MagicMock()
+        mock_dep.metadata.namespace = "default"
+        mock_dep.metadata.name = "nginx"
+        mock_dep.spec.replicas = 3
+        mock_dep.status.ready_replicas = 3
+        mock_dep.status.available_replicas = 3
+
+        mock_client = MagicMock()
+        mock_client.list_deployment_for_all_namespaces.return_value.items = [mock_dep]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_deployments
+
+        result = list_deployments.invoke({})
+
+        assert "Found 1 deployments" in result
+        assert "nginx" in result
+        assert "3/3 ready" in result
+
+    @patch("kube_medic.tools.kubernetes.get_apps_client")
+    def test_handles_no_deployments(self, mock_get_client) -> None:
+        """Test list_deployments handles empty result."""
+        mock_client = MagicMock()
+        mock_client.list_deployment_for_all_namespaces.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_deployments
+
+        result = list_deployments.invoke({})
+
+        assert "No deployments found" in result
+
+    @patch("kube_medic.tools.kubernetes.get_apps_client")
+    def test_with_namespace_filter(self, mock_get_client) -> None:
+        """Test list_deployments with namespace filter."""
+        mock_client = MagicMock()
+        mock_client.list_namespaced_deployment.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_deployments
+
+        list_deployments.invoke({"namespace": "kube-system"})
+
+        mock_client.list_namespaced_deployment.assert_called_once_with(namespace="kube-system")
+
+
+class TestListServices:
+    """Tests for list_services tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_returns_services(self, mock_get_client) -> None:
+        """Test list_services returns service info."""
+        mock_port = MagicMock()
+        mock_port.port = 80
+        mock_port.protocol = "TCP"
+
+        mock_svc = MagicMock()
+        mock_svc.metadata.namespace = "default"
+        mock_svc.metadata.name = "nginx-svc"
+        mock_svc.spec.type = "ClusterIP"
+        mock_svc.spec.cluster_ip = "10.96.0.1"
+        mock_svc.spec.ports = [mock_port]
+
+        mock_client = MagicMock()
+        mock_client.list_service_for_all_namespaces.return_value.items = [mock_svc]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_services
+
+        result = list_services.invoke({})
+
+        assert "Found 1 services" in result
+        assert "nginx-svc" in result
+        assert "ClusterIP" in result
+        assert "80/TCP" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_handles_no_services(self, mock_get_client) -> None:
+        """Test list_services handles empty result."""
+        mock_client = MagicMock()
+        mock_client.list_service_for_all_namespaces.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_services
+
+        result = list_services.invoke({})
+
+        assert "No services found" in result
+
+
+class TestListNodes:
+    """Tests for list_nodes tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_returns_nodes(self, mock_get_client) -> None:
+        """Test list_nodes returns node info."""
+        mock_condition = MagicMock()
+        mock_condition.type = "Ready"
+        mock_condition.status = "True"
+
+        mock_node = MagicMock()
+        mock_node.metadata.name = "node-1"
+        mock_node.metadata.labels = {"node-role.kubernetes.io/control-plane": ""}
+        mock_node.status.conditions = [mock_condition]
+
+        mock_client = MagicMock()
+        mock_client.list_node.return_value.items = [mock_node]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_nodes
+
+        result = list_nodes.invoke({})
+
+        assert "Found 1 nodes" in result
+        assert "node-1" in result
+        assert "Ready" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_handles_no_nodes(self, mock_get_client) -> None:
+        """Test list_nodes handles empty result."""
+        mock_client = MagicMock()
+        mock_client.list_node.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_nodes
+
+        result = list_nodes.invoke({})
+
+        assert "No nodes found" in result
+
+
+class TestGetNodeDetails:
+    """Tests for get_node_details tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_returns_node_details(self, mock_get_client) -> None:
+        """Test get_node_details returns node information."""
+        mock_condition = MagicMock()
+        mock_condition.type = "Ready"
+        mock_condition.status = "True"
+        mock_condition.message = "kubelet is posting ready status"
+
+        mock_node = MagicMock()
+        mock_node.status.conditions = [mock_condition]
+        mock_node.status.capacity = {"cpu": "4", "memory": "8Gi"}
+        mock_node.status.allocatable = {"cpu": "3800m", "memory": "7Gi"}
+        mock_node.spec.taints = None
+
+        mock_client = MagicMock()
+        mock_client.read_node.return_value = mock_node
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import get_node_details
+
+        result = get_node_details.invoke({"node_name": "node-1"})
+
+        assert "Node: node-1" in result
+        assert "Ready: True" in result
+        assert "Capacity:" in result
+        assert "Allocatable:" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_handles_not_found(self, mock_get_client) -> None:
+        """Test get_node_details handles 404."""
+        mock_client = MagicMock()
+        mock_client.read_node.side_effect = ApiException(status=404)
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import get_node_details
+
+        result = get_node_details.invoke({"node_name": "nonexistent"})
+
+        assert "not found" in result
+
+
+class TestListConfigMaps:
+    """Tests for list_configmaps tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_returns_configmaps(self, mock_get_client) -> None:
+        """Test list_configmaps returns ConfigMap info."""
+        mock_cm = MagicMock()
+        mock_cm.metadata.namespace = "default"
+        mock_cm.metadata.name = "app-config"
+        mock_cm.data = {"key1": "value1", "key2": "value2"}
+
+        mock_client = MagicMock()
+        mock_client.list_config_map_for_all_namespaces.return_value.items = [mock_cm]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_configmaps
+
+        result = list_configmaps.invoke({})
+
+        assert "Found 1 ConfigMaps" in result
+        assert "app-config" in result
+        assert "2 keys" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_handles_no_configmaps(self, mock_get_client) -> None:
+        """Test list_configmaps handles empty result."""
+        mock_client = MagicMock()
+        mock_client.list_config_map_for_all_namespaces.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_configmaps
+
+        result = list_configmaps.invoke({})
+
+        assert "No ConfigMaps found" in result
+
+
+class TestListSecrets:
+    """Tests for list_secrets tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_returns_secrets(self, mock_get_client) -> None:
+        """Test list_secrets returns Secret names (not values)."""
+        mock_secret = MagicMock()
+        mock_secret.metadata.namespace = "default"
+        mock_secret.metadata.name = "db-credentials"
+        mock_secret.type = "Opaque"
+        mock_secret.data = {"username": "xxx", "password": "xxx"}
+
+        mock_client = MagicMock()
+        mock_client.list_secret_for_all_namespaces.return_value.items = [mock_secret]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_secrets
+
+        result = list_secrets.invoke({})
+
+        assert "Found 1 Secrets" in result
+        assert "db-credentials" in result
+        assert "Opaque" in result
+        assert "2 keys" in result
+        # Should NOT contain actual secret values
+        assert "xxx" not in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    def test_handles_no_secrets(self, mock_get_client) -> None:
+        """Test list_secrets handles empty result."""
+        mock_client = MagicMock()
+        mock_client.list_secret_for_all_namespaces.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_secrets
+
+        result = list_secrets.invoke({})
+
+        assert "No Secrets found" in result
+
+
+class TestGetAppsClient:
+    """Tests for AppsV1Api client singleton."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.client")
+    def test_creates_apps_client(self, mock_client, mock_get_k8s) -> None:
+        """Test get_apps_client creates AppsV1Api client."""
+        import kube_medic.tools.kubernetes as k8s_module
+        k8s_module._apps_client = None  # Reset singleton
+
+        from kube_medic.tools.kubernetes import get_apps_client
+
+        client = get_apps_client()
+
+        mock_client.AppsV1Api.assert_called_once()
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.client")
+    def test_returns_singleton(self, mock_client, mock_get_k8s) -> None:
+        """Test get_apps_client returns singleton."""
+        import kube_medic.tools.kubernetes as k8s_module
+        k8s_module._apps_client = None  # Reset singleton
+
+        from kube_medic.tools.kubernetes import get_apps_client
+
+        client1 = get_apps_client()
+        client2 = get_apps_client()
+
+        assert client1 is client2
+        assert mock_client.AppsV1Api.call_count == 1
+
+
 class TestKubernetesToolsList:
     """Tests for kubernetes_tools list."""
 
@@ -704,6 +995,12 @@ class TestKubernetesToolsList:
             get_pod_details,
             get_pod_logs,
             get_events,
+            list_deployments,
+            list_services,
+            list_nodes,
+            get_node_details,
+            list_configmaps,
+            list_secrets,
         )
 
         assert list_namespaces in kubernetes_tools
@@ -711,18 +1008,30 @@ class TestKubernetesToolsList:
         assert get_pod_details in kubernetes_tools
         assert get_pod_logs in kubernetes_tools
         assert get_events in kubernetes_tools
-        assert len(kubernetes_tools) == 5
+        assert list_deployments in kubernetes_tools
+        assert list_services in kubernetes_tools
+        assert list_nodes in kubernetes_tools
+        assert get_node_details in kubernetes_tools
+        assert list_configmaps in kubernetes_tools
+        assert list_secrets in kubernetes_tools
+        assert len(kubernetes_tools) == 11
 
     def test_tools_have_names(self) -> None:
         """Test that all tools have proper names."""
         from kube_medic.tools.kubernetes import kubernetes_tools
 
         expected_names = [
-            "list_namespaces",
-            "list_pods",
+            "get_events",
+            "get_node_details",
             "get_pod_details",
             "get_pod_logs",
-            "get_events",
+            "list_configmaps",
+            "list_deployments",
+            "list_namespaces",
+            "list_nodes",
+            "list_pods",
+            "list_secrets",
+            "list_services",
         ]
 
         tool_names = [t.name for t in kubernetes_tools]

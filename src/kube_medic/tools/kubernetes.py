@@ -1,12 +1,21 @@
 """
-Kubernetes API Tools.
+Kubernetes API Tools (READ-ONLY).
 
-This module provides tools for interacting with the Kubernetes API:
+This module provides read-only tools for Kubernetes troubleshooting.
+No create, update, or delete operations are permitted.
+
+Tools:
 - list_namespaces: List cluster namespaces
 - list_pods: List pods with status
 - get_pod_details: Get detailed pod information
 - get_pod_logs: Retrieve pod logs
 - get_events: Get Kubernetes events
+- list_deployments: List deployments and replica status
+- list_services: List services and endpoints
+- list_nodes: List cluster nodes
+- get_node_details: Get node details and conditions
+- list_configmaps: List ConfigMaps in a namespace
+- list_secrets: List Secret names (not values)
 """
 
 from kube_medic.config import get_settings
@@ -24,6 +33,7 @@ logger = get_logger(__name__)
 # =============================================================================
 
 _v1_client: client.CoreV1Api | None = None
+_apps_client: client.AppsV1Api | None = None
 
 
 def get_k8s_client() -> client.CoreV1Api:
@@ -56,6 +66,25 @@ def get_k8s_client() -> client.CoreV1Api:
     _v1_client = client.CoreV1Api()
     logger.info("Kubernetes API client initialized successfully")
     return _v1_client
+
+
+def get_apps_client() -> client.AppsV1Api:
+    """
+    Get or create the Kubernetes AppsV1Api client for deployments.
+
+    Uses singleton pattern - only creates client once.
+    """
+    global _apps_client
+
+    if _apps_client is not None:
+        return _apps_client
+
+    # Ensure config is loaded (will be done by get_k8s_client if not already)
+    get_k8s_client()
+
+    _apps_client = client.AppsV1Api()
+    logger.debug("AppsV1Api client initialized")
+    return _apps_client
 
 
 # =============================================================================
@@ -113,6 +142,24 @@ class GetEventsInput(BaseModel):
     resource_name: str = Field(
         default="",
         description="Filter events for a specific resource (e.g., pod name)"
+    )
+
+
+class NamespaceInput(BaseModel):
+    """Input schema for namespace-scoped queries."""
+
+    namespace: str = Field(
+        default="",
+        description="Kubernetes namespace. Leave empty for all namespaces."
+    )
+
+
+class GetNodeDetailsInput(BaseModel):
+    """Input schema for getting node details."""
+
+    node_name: str = Field(
+        ...,  # Required
+        description="Name of the node to get details for"
     )
 
 
@@ -369,14 +416,249 @@ def get_events(namespace: str = "", resource_name: str = "") -> str:
         return f"Error getting events: {e}"
 
 
+@tool(args_schema=NamespaceInput)
+def list_deployments(namespace: str = "") -> str:
+    """
+    List deployments in the cluster.
+    Use this to see deployment status, replica counts, and availability.
+    """
+    try:
+        apps = get_apps_client()
+
+        if namespace:
+            deployments = apps.list_namespaced_deployment(namespace=namespace)
+        else:
+            deployments = apps.list_deployment_for_all_namespaces()
+
+        if not deployments.items:
+            return "No deployments found."
+
+        lines = [f"Found {len(deployments.items)} deployments:\n"]
+
+        for dep in deployments.items:
+            ready = dep.status.ready_replicas or 0
+            desired = dep.spec.replicas or 0
+            available = dep.status.available_replicas or 0
+
+            status = "✅" if ready == desired else "⚠️"
+            lines.append(
+                f"  {status} {dep.metadata.namespace}/{dep.metadata.name}: "
+                f"{ready}/{desired} ready, {available} available"
+            )
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error listing deployments: {e}"
+
+
+@tool(args_schema=NamespaceInput)
+def list_services(namespace: str = "") -> str:
+    """
+    List services in the cluster.
+    Use this to see service configuration, types, and cluster IPs.
+    """
+    try:
+        v1 = get_k8s_client()
+
+        if namespace:
+            services = v1.list_namespaced_service(namespace=namespace)
+        else:
+            services = v1.list_service_for_all_namespaces()
+
+        if not services.items:
+            return "No services found."
+
+        lines = [f"Found {len(services.items)} services:\n"]
+
+        for svc in services.items:
+            svc_type = svc.spec.type
+            cluster_ip = svc.spec.cluster_ip or "None"
+            ports = ", ".join(
+                f"{p.port}/{p.protocol}" for p in (svc.spec.ports or [])
+            )
+            lines.append(
+                f"  - {svc.metadata.namespace}/{svc.metadata.name}: "
+                f"{svc_type}, IP: {cluster_ip}, Ports: [{ports}]"
+            )
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error listing services: {e}"
+
+
+@tool
+def list_nodes() -> str:
+    """
+    List all nodes in the cluster.
+    Use this to see node status and check for node issues.
+    """
+    try:
+        v1 = get_k8s_client()
+        nodes = v1.list_node()
+
+        if not nodes.items:
+            return "No nodes found."
+
+        lines = [f"Found {len(nodes.items)} nodes:\n"]
+
+        for node in nodes.items:
+            # Get Ready condition
+            ready = "Unknown"
+            for cond in node.status.conditions or []:
+                if cond.type == "Ready":
+                    ready = "Ready" if cond.status == "True" else "NotReady"
+                    break
+
+            status = "✅" if ready == "Ready" else "❌"
+            roles = ",".join(
+                k.replace("node-role.kubernetes.io/", "")
+                for k in (node.metadata.labels or {}).keys()
+                if k.startswith("node-role.kubernetes.io/")
+            ) or "worker"
+
+            lines.append(
+                f"  {status} {node.metadata.name}: {ready}, roles: [{roles}]"
+            )
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error listing nodes: {e}"
+
+
+@tool(args_schema=GetNodeDetailsInput)
+def get_node_details(node_name: str) -> str:
+    """
+    Get detailed information about a specific node.
+    Use this to investigate node conditions, capacity, and allocatable resources.
+    """
+    try:
+        v1 = get_k8s_client()
+        node = v1.read_node(name=node_name)
+
+        lines = [f"Node: {node_name}"]
+
+        # Conditions
+        lines.append("\nConditions:")
+        for cond in node.status.conditions or []:
+            status = "✅" if cond.status == "True" else "❌"
+            lines.append(f"  {status} {cond.type}: {cond.status}")
+            if cond.message:
+                lines.append(f"      Message: {cond.message}")
+
+        # Capacity
+        lines.append("\nCapacity:")
+        for key, value in (node.status.capacity or {}).items():
+            lines.append(f"  - {key}: {value}")
+
+        # Allocatable
+        lines.append("\nAllocatable:")
+        for key, value in (node.status.allocatable or {}).items():
+            lines.append(f"  - {key}: {value}")
+
+        # Taints
+        if node.spec.taints:
+            lines.append("\nTaints:")
+            for taint in node.spec.taints:
+                lines.append(f"  - {taint.key}={taint.value}:{taint.effect}")
+
+        return "\n".join(lines)
+
+    except ApiException as e:
+        if e.status == 404:
+            return f"Node '{node_name}' not found"
+        return f"Error getting node details: {e}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@tool(args_schema=NamespaceInput)
+def list_configmaps(namespace: str = "") -> str:
+    """
+    List ConfigMaps in the cluster.
+    Use this to see what configuration is available to pods.
+    """
+    try:
+        v1 = get_k8s_client()
+
+        if namespace:
+            configmaps = v1.list_namespaced_config_map(namespace=namespace)
+        else:
+            configmaps = v1.list_config_map_for_all_namespaces()
+
+        if not configmaps.items:
+            return "No ConfigMaps found."
+
+        lines = [f"Found {len(configmaps.items)} ConfigMaps:\n"]
+
+        for cm in configmaps.items:
+            keys = list((cm.data or {}).keys())
+            key_count = len(keys)
+            key_preview = ", ".join(keys[:3])
+            if key_count > 3:
+                key_preview += f", ... (+{key_count - 3} more)"
+
+            lines.append(
+                f"  - {cm.metadata.namespace}/{cm.metadata.name}: "
+                f"{key_count} keys [{key_preview}]"
+            )
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error listing ConfigMaps: {e}"
+
+
+@tool(args_schema=NamespaceInput)
+def list_secrets(namespace: str = "") -> str:
+    """
+    List Secret names in the cluster (NOT the secret values).
+    Use this to check if required secrets exist.
+    """
+    try:
+        v1 = get_k8s_client()
+
+        if namespace:
+            secrets = v1.list_namespaced_secret(namespace=namespace)
+        else:
+            secrets = v1.list_secret_for_all_namespaces()
+
+        if not secrets.items:
+            return "No Secrets found."
+
+        lines = [f"Found {len(secrets.items)} Secrets:\n"]
+
+        for secret in secrets.items:
+            secret_type = secret.type or "Opaque"
+            key_count = len(secret.data or {})
+
+            lines.append(
+                f"  - {secret.metadata.namespace}/{secret.metadata.name}: "
+                f"type={secret_type}, {key_count} keys"
+            )
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error listing Secrets: {e}"
+
+
 # =============================================================================
 # TOOL COLLECTION (for easy import)
 # =============================================================================
 
 kubernetes_tools = [
-    list_namespaces,
-    list_pods,
+    get_events,
+    get_node_details,
     get_pod_details,
     get_pod_logs,
-    get_events,
+    list_configmaps,
+    list_deployments,
+    list_namespaces,
+    list_nodes,
+    list_pods,
+    list_secrets,
+    list_services,
 ]
