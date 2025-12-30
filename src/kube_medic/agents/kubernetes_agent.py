@@ -27,6 +27,7 @@ Your tools:
 - get_pod_logs: Read application logs
 - list_configmaps: See ConfigMaps (keys only)
 - list_deployments: Check deployment status and replicas
+- list_ingresses: See ingress routing rules and backends
 - list_namespaces: See cluster namespaces
 - list_nodes: Check node status
 - list_pods: Check pod status and restarts
@@ -52,7 +53,7 @@ def create_kubernetes_agent() -> Runnable:
     - Deployment status
     - Events (scheduling, crashes, etc.)
     - ConfigMaps and Secrets (names/keys only)
-    - Services and namespaces
+    - Services, ingresses, and namespaces
 
     Returns:
         A LangChain agent configured for K8s troubleshooting

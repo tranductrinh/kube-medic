@@ -24,7 +24,7 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 │    K8s    │     │  Prometheus  │
 │   Agent   │     │   Agent      │
 │           │     │              │
-│ 11 tools  │     │ 2 tools      │
+│ 12 tools  │     │ 2 tools      │
 └───────────┘     └──────────────┘
 ```
 
@@ -38,6 +38,7 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 | `get_pod_logs` | Retrieve logs from a pod/container |
 | `list_configmaps` | List ConfigMaps (keys only, not values) |
 | `list_deployments` | List deployments with replica status |
+| `list_ingresses` | List ingresses with routing rules and backends |
 | `list_namespaces` | List all namespaces in the cluster |
 | `list_nodes` | List cluster nodes with status |
 | `list_pods` | List pods with status and restart counts |
@@ -126,11 +127,13 @@ python -m kube_medic.main
 "What's the CPU usage trend for the monitoring namespace?"
 ```
 
-### Deployments & Services
+### Deployments, Services & Ingresses
 ```
 "List all deployments and their replica status"
 "Are all deployments healthy?"
 "Show me the services in kube-system namespace"
+"What ingresses are configured in the cluster?"
+"Show me the routing rules for my-app ingress"
 ```
 
 ### Events & Debugging

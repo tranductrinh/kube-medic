@@ -983,6 +983,159 @@ class TestGetAppsClient:
         assert mock_client.AppsV1Api.call_count == 1
 
 
+class TestGetNetworkingClient:
+    """Tests for NetworkingV1Api client singleton."""
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.client")
+    def test_creates_networking_client(self, mock_client, mock_get_k8s) -> None:
+        """Test get_networking_client creates NetworkingV1Api client."""
+        import kube_medic.tools.kubernetes as k8s_module
+        k8s_module._networking_client = None  # Reset singleton
+
+        from kube_medic.tools.kubernetes import get_networking_client
+
+        client = get_networking_client()
+
+        mock_client.NetworkingV1Api.assert_called_once()
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.client")
+    def test_returns_singleton(self, mock_client, mock_get_k8s) -> None:
+        """Test get_networking_client returns singleton."""
+        import kube_medic.tools.kubernetes as k8s_module
+        k8s_module._networking_client = None  # Reset singleton
+
+        from kube_medic.tools.kubernetes import get_networking_client
+
+        client1 = get_networking_client()
+        client2 = get_networking_client()
+
+        assert client1 is client2
+        assert mock_client.NetworkingV1Api.call_count == 1
+
+
+class TestListIngresses:
+    """Tests for list_ingresses tool."""
+
+    @patch("kube_medic.tools.kubernetes.get_networking_client")
+    def test_returns_ingresses(self, mock_get_client) -> None:
+        """Test list_ingresses returns ingress info."""
+        mock_path = MagicMock()
+        mock_path.path = "/api"
+        mock_path.path_type = "Prefix"
+        mock_path.backend.service.name = "api-service"
+        mock_path.backend.service.port.number = 8080
+        mock_path.backend.service.port.name = None
+
+        mock_rule = MagicMock()
+        mock_rule.host = "api.example.com"
+        mock_rule.http.paths = [mock_path]
+
+        mock_ing = MagicMock()
+        mock_ing.metadata.namespace = "default"
+        mock_ing.metadata.name = "api-ingress"
+        mock_ing.spec.ingress_class_name = "nginx"
+        mock_ing.spec.rules = [mock_rule]
+        mock_ing.spec.tls = None
+
+        mock_client = MagicMock()
+        mock_client.list_ingress_for_all_namespaces.return_value.items = [mock_ing]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_ingresses
+
+        result = list_ingresses.invoke({})
+
+        assert "Found 1 ingresses" in result
+        assert "api-ingress" in result
+        assert "nginx" in result
+        assert "api.example.com" in result
+        assert "api-service" in result
+
+    @patch("kube_medic.tools.kubernetes.get_networking_client")
+    def test_handles_no_ingresses(self, mock_get_client) -> None:
+        """Test list_ingresses handles empty result."""
+        mock_client = MagicMock()
+        mock_client.list_ingress_for_all_namespaces.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_ingresses
+
+        result = list_ingresses.invoke({})
+
+        assert "No ingresses found" in result
+
+    @patch("kube_medic.tools.kubernetes.get_networking_client")
+    def test_with_namespace_filter(self, mock_get_client) -> None:
+        """Test list_ingresses with namespace filter."""
+        mock_client = MagicMock()
+        mock_client.list_namespaced_ingress.return_value.items = []
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_ingresses
+
+        list_ingresses.invoke({"namespace": "production"})
+
+        mock_client.list_namespaced_ingress.assert_called_once_with(namespace="production")
+
+    @patch("kube_medic.tools.kubernetes.get_networking_client")
+    def test_shows_tls_hosts(self, mock_get_client) -> None:
+        """Test list_ingresses shows TLS hosts."""
+        mock_tls = MagicMock()
+        mock_tls.hosts = ["secure.example.com"]
+
+        mock_ing = MagicMock()
+        mock_ing.metadata.namespace = "default"
+        mock_ing.metadata.name = "secure-ingress"
+        mock_ing.spec.ingress_class_name = "nginx"
+        mock_ing.spec.rules = []
+        mock_ing.spec.tls = [mock_tls]
+
+        mock_client = MagicMock()
+        mock_client.list_ingress_for_all_namespaces.return_value.items = [mock_ing]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_ingresses
+
+        result = list_ingresses.invoke({})
+
+        assert "TLS: secure.example.com" in result
+
+    @patch("kube_medic.tools.kubernetes.get_networking_client")
+    def test_handles_error(self, mock_get_client) -> None:
+        """Test list_ingresses handles errors."""
+        mock_client = MagicMock()
+        mock_client.list_ingress_for_all_namespaces.side_effect = Exception("Connection failed")
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_ingresses
+
+        result = list_ingresses.invoke({})
+
+        assert "Error listing ingresses" in result
+
+    @patch("kube_medic.tools.kubernetes.get_networking_client")
+    def test_handles_default_ingress_class(self, mock_get_client) -> None:
+        """Test list_ingresses handles missing ingress class."""
+        mock_ing = MagicMock()
+        mock_ing.metadata.namespace = "default"
+        mock_ing.metadata.name = "basic-ingress"
+        mock_ing.spec.ingress_class_name = None
+        mock_ing.spec.rules = []
+        mock_ing.spec.tls = None
+
+        mock_client = MagicMock()
+        mock_client.list_ingress_for_all_namespaces.return_value.items = [mock_ing]
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import list_ingresses
+
+        result = list_ingresses.invoke({})
+
+        assert "class: default" in result
+
+
 class TestKubernetesToolsList:
     """Tests for kubernetes_tools list."""
 
@@ -997,6 +1150,7 @@ class TestKubernetesToolsList:
             get_events,
             list_deployments,
             list_services,
+            list_ingresses,
             list_nodes,
             get_node_details,
             list_configmaps,
@@ -1010,11 +1164,12 @@ class TestKubernetesToolsList:
         assert get_events in kubernetes_tools
         assert list_deployments in kubernetes_tools
         assert list_services in kubernetes_tools
+        assert list_ingresses in kubernetes_tools
         assert list_nodes in kubernetes_tools
         assert get_node_details in kubernetes_tools
         assert list_configmaps in kubernetes_tools
         assert list_secrets in kubernetes_tools
-        assert len(kubernetes_tools) == 11
+        assert len(kubernetes_tools) == 12
 
     def test_tools_have_names(self) -> None:
         """Test that all tools have proper names."""
@@ -1027,6 +1182,7 @@ class TestKubernetesToolsList:
             "get_pod_logs",
             "list_configmaps",
             "list_deployments",
+            "list_ingresses",
             "list_namespaces",
             "list_nodes",
             "list_pods",

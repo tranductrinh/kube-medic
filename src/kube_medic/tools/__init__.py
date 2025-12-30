@@ -2,7 +2,7 @@
 Tools package for KubeMedic.
 
 This package contains all tools that agents can use:
-- kubernetes: K8s API tools (pods, nodes, deployments, services, events, logs, configmaps, secrets)
+- kubernetes: K8s API tools (pods, nodes, deployments, services, ingresses, events, logs, configmaps, secrets)
 - prometheus: PromQL tools (instant queries, range queries)
 """
 
@@ -15,6 +15,7 @@ from kube_medic.tools.kubernetes import (
     get_events,
     list_deployments,
     list_services,
+    list_ingresses,
     list_nodes,
     get_node_details,
     list_configmaps,
@@ -36,6 +37,7 @@ __all__ = [
     "get_events",
     "list_deployments",
     "list_services",
+    "list_ingresses",
     "list_nodes",
     "get_node_details",
     "list_configmaps",

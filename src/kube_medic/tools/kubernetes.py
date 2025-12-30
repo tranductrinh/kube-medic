@@ -12,6 +12,7 @@ Tools:
 - get_events: Get Kubernetes events
 - list_deployments: List deployments and replica status
 - list_services: List services and endpoints
+- list_ingresses: List ingresses and routing rules
 - list_nodes: List cluster nodes
 - get_node_details: Get node details and conditions
 - list_configmaps: List ConfigMaps in a namespace
@@ -34,6 +35,7 @@ logger = get_logger(__name__)
 
 _v1_client: client.CoreV1Api | None = None
 _apps_client: client.AppsV1Api | None = None
+_networking_client: client.NetworkingV1Api | None = None
 
 
 def get_k8s_client() -> client.CoreV1Api:
@@ -85,6 +87,25 @@ def get_apps_client() -> client.AppsV1Api:
     _apps_client = client.AppsV1Api()
     logger.debug("AppsV1Api client initialized")
     return _apps_client
+
+
+def get_networking_client() -> client.NetworkingV1Api:
+    """
+    Get or create the Kubernetes NetworkingV1Api client for ingresses.
+
+    Uses singleton pattern - only creates client once.
+    """
+    global _networking_client
+
+    if _networking_client is not None:
+        return _networking_client
+
+    # Ensure config is loaded (will be done by get_k8s_client if not already)
+    get_k8s_client()
+
+    _networking_client = client.NetworkingV1Api()
+    logger.debug("NetworkingV1Api client initialized")
+    return _networking_client
 
 
 # =============================================================================
@@ -488,6 +509,63 @@ def list_services(namespace: str = "") -> str:
         return f"Error listing services: {e}"
 
 
+@tool(args_schema=NamespaceInput)
+def list_ingresses(namespace: str = "") -> str:
+    """
+    List ingresses in the cluster.
+    Use this to see HTTP/HTTPS routing rules, hosts, and backend services.
+    """
+    try:
+        networking = get_networking_client()
+
+        if namespace:
+            ingresses = networking.list_namespaced_ingress(namespace=namespace)
+        else:
+            ingresses = networking.list_ingress_for_all_namespaces()
+
+        if not ingresses.items:
+            return "No ingresses found."
+
+        lines = [f"Found {len(ingresses.items)} ingresses:\n"]
+
+        for ing in ingresses.items:
+            ing_class = ing.spec.ingress_class_name or "default"
+            lines.append(
+                f"  - {ing.metadata.namespace}/{ing.metadata.name} "
+                f"(class: {ing_class})"
+            )
+
+            # Show rules
+            for rule in (ing.spec.rules or []):
+                host = rule.host or "*"
+                if rule.http and rule.http.paths:
+                    for path in rule.http.paths:
+                        backend_svc = path.backend.service.name if path.backend.service else "N/A"
+                        backend_port = ""
+                        if path.backend.service and path.backend.service.port:
+                            port = path.backend.service.port
+                            backend_port = port.number or port.name or ""
+                        path_value = path.path or "/"
+                        path_type = path.path_type or "Prefix"
+                        lines.append(
+                            f"      {host}{path_value} ({path_type}) -> "
+                            f"{backend_svc}:{backend_port}"
+                        )
+
+            # Show TLS hosts
+            if ing.spec.tls:
+                tls_hosts = []
+                for tls in ing.spec.tls:
+                    tls_hosts.extend(tls.hosts or [])
+                if tls_hosts:
+                    lines.append(f"      TLS: {', '.join(tls_hosts)}")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error listing ingresses: {e}"
+
+
 @tool
 def list_nodes() -> str:
     """
@@ -656,6 +734,7 @@ kubernetes_tools = [
     get_pod_logs,
     list_configmaps,
     list_deployments,
+    list_ingresses,
     list_namespaces,
     list_nodes,
     list_pods,

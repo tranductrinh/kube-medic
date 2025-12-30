@@ -29,6 +29,13 @@ class TestKubernetesSystemPrompt:
             "get_pod_details",
             "get_pod_logs",
             "get_events",
+            "list_deployments",
+            "list_services",
+            "list_ingresses",
+            "list_nodes",
+            "get_node_details",
+            "list_configmaps",
+            "list_secrets",
         ]
 
         for tool in expected_tools:
@@ -142,7 +149,7 @@ class TestKubernetesToolsIntegration:
         """Test that kubernetes_tools has expected number of tools."""
         from kube_medic.tools.kubernetes import kubernetes_tools
 
-        assert len(kubernetes_tools) == 11
+        assert len(kubernetes_tools) == 12
 
     def test_kubernetes_tools_have_names(self) -> None:
         """Test that all kubernetes tools have proper names."""
@@ -155,6 +162,7 @@ class TestKubernetesToolsIntegration:
             "get_pod_logs",
             "list_configmaps",
             "list_deployments",
+            "list_ingresses",
             "list_namespaces",
             "list_nodes",
             "list_pods",
