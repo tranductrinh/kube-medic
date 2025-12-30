@@ -14,19 +14,19 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 
 ```
 ┌─────────────────────────────────────────┐
-│          SUPERVISOR AGENT               │
-│   (Routes questions to specialists)     │
-│   (Has conversation memory)             │
-└─────────────┬───────────────────────────┘
-              │
-    ┌─────────┼─────────┬─────────────┐
-    ▼         ▼         ▼             │
-┌───────┐ ┌───────┐ ┌─────────┐       │
-│  K8s  │ │ Prom  │ │ Network │       │
-│ Agent │ │ Agent │ │  Agent  │       │
-│       │ │       │ │         │       │
-│12 tool│ │2 tools│ │ 1 tool  │       │
-└───────┘ └───────┘ └─────────┘       │
+│            SUPERVISOR AGENT             │
+│    (Routes questions to specialists)    │
+│       (Has conversation memory)         │
+└────────────────────┬────────────────────┘
+                     │
+       ┌─────────────┼─────────────┐
+       ▼             ▼             ▼
+  ┌─────────┐   ┌─────────┐   ┌─────────┐
+  │   K8s   │   │  Prom   │   │ Network │
+  │  Agent  │   │  Agent  │   │  Agent  │
+  │         │   │         │   │         │
+  │12 tools │   │ 2 tools │   │ 1 tool  │
+  └─────────┘   └─────────┘   └─────────┘
 ```
 
 ### Kubernetes Agent Tools (READ-ONLY)
