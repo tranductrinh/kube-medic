@@ -96,6 +96,58 @@ class Settings(BaseSettings):
         gt=0,
     )
 
+    # =========================================================================
+    # API SERVER CONFIGURATION
+    # =========================================================================
+    api_host: str = Field(
+        default="0.0.0.0",
+        description="Host to bind the API server to",
+    )
+    api_port: int = Field(
+        default=8000,
+        description="Port to run the API server on",
+        gt=0,
+        le=65535,
+    )
+    api_log_level: str = Field(
+        default="info",
+        description="Log level for the API server (debug, info, warning, error, critical)",
+    )
+
+    # =========================================================================
+    # EMAIL CONFIGURATION (Required - for email notifications)
+    # =========================================================================
+    smtp_host: str = Field(
+        ...,
+        description="SMTP server hostname",
+    )
+    smtp_port: int = Field(
+        default=587,
+        description="SMTP server port",
+        gt=0,
+        le=65535,
+    )
+    smtp_username: str = Field(
+        default="",
+        description="SMTP authentication username (optional)",
+    )
+    smtp_password: str = Field(
+        default="",
+        description="SMTP authentication password (optional)",
+    )
+    smtp_use_tls: bool = Field(
+        default=True,
+        description="Use TLS for SMTP connection",
+    )
+    email_from: str = Field(
+        ...,
+        description="Sender email address",
+    )
+    email_to: str = Field(
+        ...,
+        description="Recipient email address for all notifications",
+    )
+
     @field_validator("prometheus_url", "azure_openai_endpoint")
     @classmethod
     def remove_trailing_slash(cls, v: str) -> str:

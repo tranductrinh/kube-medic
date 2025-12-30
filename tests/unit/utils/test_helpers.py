@@ -309,118 +309,80 @@ class TestGetLlm:
 class TestAskAgent:
     """Tests for ask_agent function."""
 
-    def test_ask_agent_extracts_response(self) -> None:
-        """Test that ask_agent extracts the AI response correctly."""
+    def test_returns_final_response(self) -> None:
+        """Test that ask_agent returns the final AI response."""
         from kube_medic.utils.helpers import ask_agent
 
-        # Create mock agent
         mock_agent = MagicMock()
+
+        # Create mock final response message
         mock_message = MagicMock()
-        mock_message.content = "This is the response"
+        mock_message.content = "Investigation complete"
         mock_message.type = "ai"
         mock_message.tool_calls = None
 
-        mock_agent.invoke.return_value = {
-            "messages": [mock_message]
-        }
+        mock_agent.stream.return_value = [
+            {"agent": {"messages": [mock_message]}}
+        ]
 
-        result = ask_agent(mock_agent, "test query", thread_id="test-123")
+        result = ask_agent(mock_agent, "query")
 
-        assert result == "This is the response"
-        mock_agent.invoke.assert_called_once()
+        assert result == "Investigation complete"
 
-    def test_ask_agent_uses_thread_id(self) -> None:
+    def test_uses_thread_id(self) -> None:
         """Test that ask_agent passes thread_id in config."""
         from kube_medic.utils.helpers import ask_agent
 
         mock_agent = MagicMock()
-        mock_message = MagicMock()
-        mock_message.content = "response"
-        mock_message.type = "ai"
-        mock_message.tool_calls = None
+        mock_agent.stream.return_value = []
 
-        mock_agent.invoke.return_value = {"messages": [mock_message]}
+        ask_agent(mock_agent, "query", thread_id="test-thread")
 
-        ask_agent(mock_agent, "query", thread_id="my-thread")
-
-        # Check the config passed to invoke
-        call_args = mock_agent.invoke.call_args
+        call_args = mock_agent.stream.call_args
         config = call_args[1]["config"]
-        assert config["configurable"]["thread_id"] == "my-thread"
+        assert config["configurable"]["thread_id"] == "test-thread"
 
-    def test_ask_agent_returns_default_on_no_response(self) -> None:
-        """Test that ask_agent returns default message when no AI response."""
-        from kube_medic.utils.helpers import ask_agent
-
-        mock_agent = MagicMock()
-        mock_agent.invoke.return_value = {"messages": []}
-
-        result = ask_agent(mock_agent, "query")
-
-        assert result == "No response from agent."
-
-    def test_ask_agent_skips_tool_call_messages(self) -> None:
-        """Test that ask_agent skips messages with only tool calls."""
+    def test_handles_tool_calls(self) -> None:
+        """Test that ask_agent handles tool call messages."""
         from kube_medic.utils.helpers import ask_agent
 
         mock_agent = MagicMock()
 
-        # Tool call message (should be skipped)
-        tool_msg = MagicMock()
-        tool_msg.content = ""
-        tool_msg.type = "ai"
-        tool_msg.tool_calls = [{"name": "some_tool"}]
+        # Tool call message
+        tool_call_msg = MagicMock()
+        tool_call_msg.content = "Let me check..."
+        tool_call_msg.type = "ai"
+        tool_call_msg.tool_calls = [{"name": "list_pods", "args": {"namespace": "default"}}]
 
-        # Final response message
+        # Tool result message
+        tool_result_msg = MagicMock()
+        tool_result_msg.content = "Pod: nginx-abc123"
+        tool_result_msg.type = "tool"
+        tool_result_msg.name = "list_pods"
+
+        # Final response
         final_msg = MagicMock()
-        final_msg.content = "Final answer"
+        final_msg.content = "Found pod nginx-abc123"
         final_msg.type = "ai"
         final_msg.tool_calls = None
 
-        mock_agent.invoke.return_value = {
-            "messages": [tool_msg, final_msg]
-        }
+        mock_agent.stream.return_value = [
+            {"agent": {"messages": [tool_call_msg]}},
+            {"tools": {"messages": [tool_result_msg]}},
+            {"agent": {"messages": [final_msg]}},
+        ]
 
         result = ask_agent(mock_agent, "query")
 
-        assert result == "Final answer"
+        assert result == "Found pod nginx-abc123"
 
-
-class TestStreamAgent:
-    """Tests for stream_agent function."""
-
-    def test_stream_agent_returns_final_response(self) -> None:
-        """Test that stream_agent returns the final AI response."""
-        from kube_medic.utils.helpers import stream_agent
-
-        mock_agent = MagicMock()
-
-        # Create mock message
-        mock_message = MagicMock()
-        mock_message.content = "Streamed response"
-        mock_message.type = "ai"
-        mock_message.tool_calls = None
-        mock_message.pretty_print = MagicMock()
-
-        # Mock the stream method
-        mock_agent.stream.return_value = [
-            {"step": {"messages": [mock_message]}}
-        ]
-
-        result = stream_agent(mock_agent, "query", verbose=False)
-
-        assert result == "Streamed response"
-
-    def test_stream_agent_uses_thread_id(self) -> None:
-        """Test that stream_agent passes thread_id in config."""
-        from kube_medic.utils.helpers import stream_agent
+    def test_returns_default_on_empty_response(self) -> None:
+        """Test that ask_agent returns default when no response."""
+        from kube_medic.utils.helpers import ask_agent
 
         mock_agent = MagicMock()
         mock_agent.stream.return_value = []
 
-        stream_agent(mock_agent, "query", thread_id="stream-thread", verbose=False)
+        result = ask_agent(mock_agent, "query")
 
-        # Check the config passed to stream
-        call_args = mock_agent.stream.call_args
-        config = call_args[1]["config"]
-        assert config["configurable"]["thread_id"] == "stream-thread"
+        assert result == "No response from agent."

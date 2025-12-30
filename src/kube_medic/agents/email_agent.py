@@ -1,5 +1,5 @@
 """
-Network Agent: Handles HTTP connectivity checks and network diagnostics.
+Email Agent: Handles sending email notifications with investigation results.
 This agent is a "worker" that the supervisor delegates to.
 """
 
@@ -7,7 +7,7 @@ from langchain.agents import create_agent
 from langchain_core.runnables import Runnable
 
 from kube_medic.logging_config import get_logger
-from kube_medic.tools.network import network_tools
+from kube_medic.tools.email import email_tools
 from kube_medic.utils.helpers import get_llm
 
 logger = get_logger(__name__)
@@ -17,11 +17,9 @@ logger = get_logger(__name__)
 # =============================================================================
 # Keeping prompts as constants makes them easy to find and modify.
 
-NETWORK_SYSTEM_PROMPT = """You are a network connectivity expert.
+EMAIL_SYSTEM_PROMPT = """You are an email notification specialist. Send investigation reports.
 
-Efficient rule: Check all requested URLs in one pass, return comprehensive results.
-
-Response format: Include status code, response time, and any errors for each endpoint."""
+Efficient rule: Call send_email exactly ONCE with all findings. Confirm success."""
 
 
 # =============================================================================
@@ -29,26 +27,25 @@ Response format: Include status code, response time, and any errors for each end
 # =============================================================================
 # Using factory functions (not global variables) so agents are created on-demand.
 
-def create_network_agent() -> Runnable:
+def create_email_agent() -> Runnable:
     """
-    Create the Network specialist agent.
+    Create the Email notification agent.
 
     This agent handles:
-    - HTTP/HTTPS endpoint connectivity checks
-    - Response time measurements
-    - SSL certificate verification
-    - Redirect following
+    - Composing and sending email notifications
+    - Formatting investigation results for email delivery
+    - Notifying stakeholders about alerts and findings
 
     Returns:
-        A LangChain agent configured for network diagnostics
+        A LangChain agent configured for email notifications
     """
-    logger.info("Creating Network specialist agent...")
+    logger.info("Creating Email specialist agent...")
     llm = get_llm()
 
     agent = create_agent(
         model=llm,
-        tools=network_tools,
-        system_prompt=NETWORK_SYSTEM_PROMPT,
+        tools=email_tools,
+        system_prompt=EMAIL_SYSTEM_PROMPT,
     )
-    logger.info(f"Network agent created with {len(network_tools)} tools")
+    logger.info(f"Email agent created with {len(email_tools)} tools")
     return agent

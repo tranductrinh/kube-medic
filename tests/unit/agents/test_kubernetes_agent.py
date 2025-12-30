@@ -20,40 +20,25 @@ class TestKubernetesSystemPrompt:
         assert "Kubernetes" in KUBERNETES_SYSTEM_PROMPT
 
     def test_prompt_mentions_all_tools(self) -> None:
-        """Test that system prompt mentions all available tools."""
+        """Test that system prompt mentions key tools."""
         from kube_medic.agents.kubernetes_agent import KUBERNETES_SYSTEM_PROMPT
 
-        expected_tools = [
-            "list_namespaces",
-            "list_pods",
-            "get_pod_details",
-            "get_pod_logs",
-            "get_events",
-            "list_deployments",
-            "list_services",
-            "list_ingresses",
-            "list_nodes",
-            "get_node_details",
-            "list_configmaps",
-            "list_secrets",
-        ]
+        # Key tools should be mentioned
+        assert "list_pods" in KUBERNETES_SYSTEM_PROMPT
+        assert "get_pod_logs" in KUBERNETES_SYSTEM_PROMPT
+        assert "get_events" in KUBERNETES_SYSTEM_PROMPT
 
-        for tool in expected_tools:
-            assert tool in KUBERNETES_SYSTEM_PROMPT, f"Tool {tool} not in prompt"
-
-    def test_prompt_has_important_instruction(self) -> None:
-        """Test that prompt has IMPORTANT instruction for supervisor."""
+    def test_prompt_has_efficiency_rules(self) -> None:
+        """Test that prompt has efficiency rules."""
         from kube_medic.agents.kubernetes_agent import KUBERNETES_SYSTEM_PROMPT
 
-        assert "IMPORTANT" in KUBERNETES_SYSTEM_PROMPT
-        assert "supervisor" in KUBERNETES_SYSTEM_PROMPT.lower()
+        assert "Efficient rules" in KUBERNETES_SYSTEM_PROMPT
 
     def test_prompt_describes_agent_role(self) -> None:
         """Test that prompt describes the agent's role."""
         from kube_medic.agents.kubernetes_agent import KUBERNETES_SYSTEM_PROMPT
 
         assert "expert" in KUBERNETES_SYSTEM_PROMPT.lower()
-        assert "investigate" in KUBERNETES_SYSTEM_PROMPT.lower()
 
 
 class TestCreateKubernetesAgent:

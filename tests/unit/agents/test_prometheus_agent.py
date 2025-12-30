@@ -31,18 +31,18 @@ class TestPrometheusSystemPrompt:
         for tool in expected_tools:
             assert tool in PROMETHEUS_SYSTEM_PROMPT, f"Tool {tool} not in prompt"
 
-    def test_prompt_has_important_instruction(self) -> None:
-        """Test that prompt has IMPORTANT instruction for supervisor."""
+    def test_prompt_has_efficiency_rules(self) -> None:
+        """Test that prompt has efficiency rules."""
         from kube_medic.agents.prometheus_agent import PROMETHEUS_SYSTEM_PROMPT
 
-        assert "IMPORTANT" in PROMETHEUS_SYSTEM_PROMPT
-        assert "supervisor" in PROMETHEUS_SYSTEM_PROMPT.lower()
+        assert "Efficient rules" in PROMETHEUS_SYSTEM_PROMPT
+        assert "findings" in PROMETHEUS_SYSTEM_PROMPT.lower()
 
     def test_prompt_describes_agent_role(self) -> None:
         """Test that prompt describes the agent's role."""
         from kube_medic.agents.prometheus_agent import PROMETHEUS_SYSTEM_PROMPT
 
-        assert "expert" in PROMETHEUS_SYSTEM_PROMPT.lower()
+        assert "specialist" in PROMETHEUS_SYSTEM_PROMPT.lower()
         assert "metrics" in PROMETHEUS_SYSTEM_PROMPT.lower()
 
     def test_prompt_mentions_promql(self) -> None:

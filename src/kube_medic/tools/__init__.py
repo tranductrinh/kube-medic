@@ -5,6 +5,7 @@ This package contains all tools that agents can use:
 - kubernetes: K8s API tools (pods, nodes, deployments, services, ingresses, events, logs, configmaps, secrets)
 - prometheus: PromQL tools (instant queries, range queries)
 - network: HTTP connectivity tools (endpoint checks)
+- email: Email notification tools (send_email)
 """
 
 from kube_medic.tools.kubernetes import (
@@ -31,6 +32,10 @@ from kube_medic.tools.network import (
     network_tools,
     http_check,
 )
+from kube_medic.tools.email import (
+    email_tools,
+    send_email,
+)
 
 __all__ = [
     # Kubernetes
@@ -54,4 +59,7 @@ __all__ = [
     # Network
     "network_tools",
     "http_check",
+    # Email
+    "email_tools",
+    "send_email",
 ]

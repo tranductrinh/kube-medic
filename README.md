@@ -8,64 +8,73 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 - **Kubernetes**: Query pods, logs, events, ingresses, and more
 - **Prometheus**: Query metrics via PromQL (instant and range queries)
 - **Network**: HTTP connectivity checks for ingress/endpoint verification
+- **Email**: Send investigation results and alerts via email
 - **Conversation Memory**: Maintains context across questions
+- **REST API**: FastAPI server with generic webhook support (compatible with Alertmanager and custom systems)
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│            SUPERVISOR AGENT             │
-│    (Routes questions to specialists)    │
-│       (Has conversation memory)         │
-└────────────────────┬────────────────────┘
-                     │
-       ┌─────────────┼─────────────┐
-       ▼             ▼             ▼
-  ┌─────────┐   ┌─────────┐   ┌─────────┐
-  │   K8s   │   │  Prom   │   │ Network │
-  │  Agent  │   │  Agent  │   │  Agent  │
-  │         │   │         │   │         │
-  │12 tools │   │ 2 tools │   │ 1 tool  │
-  └─────────┘   └─────────┘   └─────────┘
+┌─────────────────────────────────────────────────────┐
+│                 SUPERVISOR AGENT                     │
+│        (Routes questions to specialists)             │
+│           (Has conversation memory)                  │
+└────────────────────────┬────────────────────────────┘
+                         │
+       ┌─────────────┬───┴───┬─────────────┐
+       ▼             ▼       ▼             ▼
+  ┌─────────┐   ┌─────────┐ ┌─────────┐ ┌─────────┐
+  │   K8s   │   │  Prom   │ │ Network │ │  Email  │
+  │  Agent  │   │  Agent  │ │  Agent  │ │  Agent  │
+  │         │   │         │ │         │ │         │
+  │12 tools │   │ 2 tools │ │ 1 tool  │ │ 1 tool  │
+  └─────────┘   └─────────┘ └─────────┘ └─────────┘
 ```
 
 ### Kubernetes Agent Tools (READ-ONLY)
 
-| Tool | Description |
-|------|-------------|
-| `get_events` | Get Kubernetes events (scheduling, crashes, etc.) |
-| `get_node_details` | Get node capacity, conditions, and taints |
-| `get_pod_details` | Get detailed information about a specific pod |
-| `get_pod_logs` | Retrieve logs from a pod/container |
-| `list_configmaps` | List ConfigMaps (keys only, not values) |
-| `list_deployments` | List deployments with replica status |
-| `list_ingresses` | List ingresses with routing rules and backends |
-| `list_namespaces` | List all namespaces in the cluster |
-| `list_nodes` | List cluster nodes with status |
-| `list_pods` | List pods with status and restart counts |
-| `list_secrets` | List Secret names (not values) |
-| `list_services` | List services with types and endpoints |
+| Tool               | Description                                       |
+|--------------------|---------------------------------------------------|
+| `get_events`       | Get Kubernetes events (scheduling, crashes, etc.) |
+| `get_node_details` | Get node capacity, conditions, and taints         |
+| `get_pod_details`  | Get detailed information about a specific pod     |
+| `get_pod_logs`     | Retrieve logs from a pod/container                |
+| `list_configmaps`  | List ConfigMaps (keys only, not values)           |
+| `list_deployments` | List deployments with replica status              |
+| `list_ingresses`   | List ingresses with routing rules and backends    |
+| `list_namespaces`  | List all namespaces in the cluster                |
+| `list_nodes`       | List cluster nodes with status                    |
+| `list_pods`        | List pods with status and restart counts          |
+| `list_secrets`     | List Secret names (not values)                    |
+| `list_services`    | List services with types and endpoints            |
 
 ### Prometheus Agent Tools
 
-| Tool | Description |
-|------|-------------|
-| `prometheus_query` | Execute PromQL instant queries |
+| Tool                     | Description                                     |
+|--------------------------|-------------------------------------------------|
+| `prometheus_query`       | Execute PromQL instant queries                  |
 | `prometheus_query_range` | Execute PromQL range queries for trend analysis |
 
 ### Network Agent Tools
 
-| Tool | Description |
-|------|-------------|
+| Tool         | Description                                                                     |
+|--------------|---------------------------------------------------------------------------------|
 | `http_check` | Check HTTP/HTTPS endpoint accessibility (status code, response time, redirects) |
+
+### Email Agent Tools
+
+| Tool         | Description                                         |
+|--------------|-----------------------------------------------------|
+| `send_email` | Send email notifications with investigation results |
 
 ## Prerequisites
 
 - macOS (development tested)
-- Python 3.9+
+- Python 3.12+
 - Access to a Kubernetes cluster (kubeconfig or in-cluster)
 - Prometheus instance
-- Azure OpenAI API Key
+- Azure OpenAI API access
+- SMTP server for email notifications
 
 ## Installation
 
@@ -92,90 +101,77 @@ cp .env.example .env
 
 Required environment variables:
 
-| Variable                       | Description                           |
-|--------------------------------|---------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI endpoint URL             |
-| `AZURE_OPENAI_API_KEY`         | Azure OpenAI API key                  |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name (e.g., gpt-4.1) |
-| `AZURE_OPENAI_API_VERSION`     | API version                           |
-| `PROMETHEUS_URL`               | Prometheus server URL                 |
+| Variable                       | Description                              |
+|--------------------------------|------------------------------------------|
+| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI endpoint URL                |
+| `AZURE_OPENAI_API_KEY`         | Azure OpenAI API key                     |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name (e.g., gpt-4o)     |
+| `PROMETHEUS_URL`               | Prometheus server URL                    |
+| `SMTP_HOST`                    | SMTP server hostname (e.g., smtp.gmail.com) |
+| `EMAIL_FROM`                   | Sender email address                     |
+| `EMAIL_TO`                     | Recipient for all investigation reports  |
 
-The program will exit if required variables are missing.
+The server will fail to start if required variables are missing. See `.env.example` for all options.
 
 ## Usage
 
+KubeMedic runs as a REST API server that accepts webhooks for automated incident investigation. The webhook endpoint
+accepts any JSON payload and intelligently processes it.
+
 ```bash
-# Run interactive mode
-python -m kube_medic.main
+# Start the API server
+kube-medic
+
+# Or directly
+python -m kube_medic.api
 ```
 
-## Example Queries
+### API Endpoints
 
-### Cluster Health & Overview
-```
-"Check overall cluster health"
-"Are all nodes healthy?"
-"Show me the cluster namespaces"
-```
+| Endpoint        | Method | Description                                                          |
+|-----------------|--------|----------------------------------------------------------------------|
+| `/health`       | GET    | Health check                                                         |
+| `/webhook`      | POST   | Generic webhook (async, returns immediately with `{"status": "ok"}`) |
+| `/webhook/sync` | POST   | Generic webhook (waits for agent response)                           |
+| `/query`        | POST   | Direct agent query                                                   |
 
-### Pod Troubleshooting
-```
-"What pods are crashing in the default namespace?"
-"Show me pods with high restart counts"
-"Get the logs for pod nginx-abc123 in production"
-"Why is my pod stuck in Pending state?"
-```
+API documentation available at `http://localhost:8000/docs` (Swagger UI).
 
-### Resource Usage (Prometheus)
-```
-"Which pods are using the most CPU right now?"
-"Show memory usage trends for the last hour"
-"Are there any pods near their resource limits?"
-"What's the CPU usage trend for the monitoring namespace?"
-```
+### API Examples
 
-### Deployments, Services & Ingresses
-```
-"List all deployments and their replica status"
-"Are all deployments healthy?"
-"Show me the services in kube-system namespace"
-"What ingresses are configured in the cluster?"
-"Show me the routing rules for my-app ingress"
-```
+```bash
+# Health check
+curl http://localhost:8000/health
 
-### Connectivity Checks (Network Agent)
-```
-"Check if https://api.example.com/health is accessible"
-"Verify the ingress endpoint is responding"
-"What's the response time for my-service endpoint?"
-"Is the SSL certificate valid for my domain?"
-```
+# Direct query
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Why is my pod crashing?", "thread_id": "user-123"}'
 
-### Events & Debugging
-```
-"Are there any warning events in the cluster?"
-"Show recent events for pod my-app-xyz"
-"What scheduling issues are happening?"
-```
+# Generic webhook (any JSON)
+curl -X POST http://localhost:8000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"issue": "High latency detected", "service": "api-gateway", "p99_ms": 2500}'
 
-### Nodes
-```
-"Show node capacity and allocatable resources"
-"Are there any node conditions I should worry about?"
-"Which nodes have taints?"
-```
+# Alertmanager webhook
+curl -X POST http://localhost:8000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "firing",
+    "alerts": [{
+      "status": "firing",
+      "labels": {
+        "alertname": "HighMemoryUsage",
+        "namespace": "production",
+        "pod": "my-app-xyz",
+        "severity": "warning"
+      },
+      "annotations": {
+        "description": "Pod memory usage exceeds 90%"
+      }
+    }]
+  }'
 
-### Configuration
-```
-"List ConfigMaps in the default namespace"
-"What secrets exist in production?"
-```
-
-### Multi-Step Investigation (uses conversation memory)
-```
-"Which namespace has the most pod restarts?"
-"Show me the events for that namespace"
-"Get logs from the pod with most restarts"
 ```
 
 ## Running Tests
@@ -192,4 +188,4 @@ python -m kube_medic.main
 
 # With coverage report
 ./run_tests.sh coverage
-
+```

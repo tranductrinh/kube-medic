@@ -11,9 +11,10 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel, Field
 
+from kube_medic.agents.email_agent import create_email_agent
 from kube_medic.agents.kubernetes_agent import create_kubernetes_agent
-from kube_medic.agents.prometheus_agent import create_prometheus_agent
 from kube_medic.agents.network_agent import create_network_agent
+from kube_medic.agents.prometheus_agent import create_prometheus_agent
 from kube_medic.logging_config import get_logger
 from kube_medic.utils.helpers import get_llm
 
@@ -67,29 +68,32 @@ def run_agent(agent, request: str) -> str:
 # SUPERVISOR SYSTEM PROMPT
 # =============================================================================
 
-SUPERVISOR_SYSTEM_PROMPT = """You are a Kubernetes troubleshooting supervisor. Your goal is to find the ROOT CAUSE, not just symptoms.
+SUPERVISOR_SYSTEM_PROMPT = """You are a Kubernetes troubleshooting supervisor. Find the ROOT CAUSE efficiently.
 
-INVESTIGATION RULES:
-- "Running" status does NOT mean healthy - always check logs
-- When you find an error, investigate its source (e.g., DB error → check DB pod)
-- Keep investigating until you identify the root cause
-- Do NOT stop to ask the user if they want to continue - just investigate
+Available tools:
+- ask_kubernetes_expert: pods, logs, events, services, deployments, ingresses
+- ask_prometheus_expert: CPU/memory metrics, error rates, resource trends
+- ask_network_expert: HTTP endpoint connectivity checks
+- ask_email_expert: send investigation report (ALWAYS call after investigation)
 
-YOUR EXPERTS:
-- ask_kubernetes_expert: pods, logs, events, services, endpoints, ingresses, deployments
-- ask_prometheus_expert: CPU/memory, error rates, restarts, metrics
-- ask_network_expert: HTTP connectivity (use ingress hostname, never internal IPs)
+Efficient rules:
+- Make ONE comprehensive request per expert - ask for everything you need at once
+- BAD: "list pods" then "get logs for pod X" then "get events" (3 calls)
+- GOOD: "List all pods, get logs and events for any unhealthy ones" (1 call)
+- Limit to 2-3 expert calls total before concluding
+- "Running" status does NOT mean healthy - always request logs
 
-HOW TO INVESTIGATE:
-1. Start with the reported problem (check status, logs, connectivity)
-2. Follow the error trail - each error points to the next thing to check
-3. Check dependencies (app error → database? external service? config?)
-4. Stop only when you find the root cause or exhaust all leads
+Investigation steps:
+1. Ask kubernetes_expert for: pod status + logs + events (one comprehensive request)
+2. If metrics needed, ask prometheus_expert once for all relevant metrics
+3. Conclude with root cause and fix
+4. Send the report by email
 
-RESPONSE FORMAT (only after finding root cause):
-- ❌ Root Cause and ⚠️ Contributing Factors
-- Evidence Trail: what you checked and found
-- Actionable Fix: provide specific kubectl commands or scripts to fix the issue (never auto-execute)"""
+Response format:
+- Summary: concise overview of issue
+- Root cause: concise explanation
+- Evidence: what was checked and found
+- Fix: specific kubectl commands (never auto-execute) or other steps"""
 
 
 # =============================================================================
@@ -104,6 +108,7 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
     - Routes questions to specialist agents
     - Synthesizes responses
     - Maintains conversation context (if memory enabled)
+    - Sends email notifications after investigations
 
     Args:
         use_memory: Whether to enable conversation memory (default: True)
@@ -119,6 +124,7 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
     kubernetes_agent = create_kubernetes_agent()
     prometheus_agent = create_prometheus_agent()
     network_agent = create_network_agent()
+    email_agent = create_email_agent()
 
     # -------------------------------------------------------------------------
     # Wrap specialists as tools
@@ -127,57 +133,30 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
 
     @tool(args_schema=AgentQueryInput)
     def ask_kubernetes_expert(request: str) -> str:
-        """
-        Delegate a question to the Kubernetes Specialist Agent.
-
-        Use this for questions about:
-        - Pod status, health, and restarts
-        - Container logs and errors
-        - Kubernetes events and warnings
-        - Namespace and resource structure
-        - Deployment and ingress configuration
-
-        Example: "Check if any pods are crashing in the monitoring-system namespace"
-        """
+        """Query Kubernetes resources: pods, logs, events, deployments, services, ingresses."""
         logger.debug("Delegating to Kubernetes expert")
         return run_agent(kubernetes_agent, request)
 
     @tool(args_schema=AgentQueryInput)
     def ask_prometheus_expert(request: str) -> str:
-        """
-        Delegate a question to the Prometheus Specialist Agent.
-
-        Use this for questions about:
-        - CPU and memory usage
-        - Resource consumption trends
-        - Pod restart counts and stability
-        - Cluster health overview
-        - Performance metrics
-
-        Example: "Which pods are using the most CPU right now?"
-        """
+        """Query Prometheus metrics: CPU, memory, error rates, resource trends."""
         logger.debug("Delegating to Prometheus expert")
         return run_agent(prometheus_agent, request)
 
     @tool(args_schema=AgentQueryInput)
     def ask_network_expert(request: str) -> str:
-        """
-        Delegate a question to the Network Specialist Agent.
-
-        Use this for questions about:
-        - HTTP/HTTPS endpoint accessibility
-        - Ingress connectivity verification
-        - Response time measurements
-        - SSL certificate issues
-        - API endpoint health checks
-
-        Example: "Check if https://api.example.com/health is accessible"
-        """
+        """Check HTTP/HTTPS endpoint connectivity and response times."""
         logger.debug("Delegating to Network expert")
         return run_agent(network_agent, request)
 
+    @tool(args_schema=AgentQueryInput)
+    def ask_email_expert(request: str) -> str:
+        """Send investigation report via email. Recipient is pre-configured."""
+        logger.debug("Delegating to Email expert")
+        return run_agent(email_agent, request)
+
     # Agent tools for supervisor
-    agent_tools = [ask_kubernetes_expert, ask_prometheus_expert, ask_network_expert]
+    agent_tools = [ask_kubernetes_expert, ask_prometheus_expert, ask_network_expert, ask_email_expert]
 
     # Create checkpointer for memory (if enabled)
     checkpointer = InMemorySaver() if use_memory else None

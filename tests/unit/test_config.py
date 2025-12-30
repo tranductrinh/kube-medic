@@ -17,6 +17,18 @@ import pytest
 from pydantic import ValidationError
 
 
+# Base required environment variables for all tests
+REQUIRED_ENV = {
+    "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
+    "AZURE_OPENAI_API_KEY": "test-key",
+    "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
+    "PROMETHEUS_URL": "http://prometheus:9090",
+    "SMTP_HOST": "smtp.test.com",
+    "EMAIL_FROM": "test@example.com",
+    "EMAIL_TO": "recipient@example.com",
+}
+
+
 class TestSettingsLoading:
     """Tests for settings loading from environment."""
 
@@ -25,12 +37,7 @@ class TestSettingsLoading:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -44,13 +51,7 @@ class TestSettingsLoading:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-            "UNKNOWN_SETTING": "should-be-ignored",
-        }, clear=True):
+        with patch.dict(os.environ, {**REQUIRED_ENV, "UNKNOWN_SETTING": "should-be-ignored"}, clear=True):
             get_settings.cache_clear()
             # Should not raise error for extra settings
             settings = get_settings()
@@ -65,12 +66,7 @@ class TestSettingsCaching:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings1 = get_settings()
             settings2 = get_settings()
@@ -82,12 +78,7 @@ class TestSettingsCaching:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings1 = get_settings()
             get_settings.cache_clear()
@@ -105,12 +96,7 @@ class TestURLNormalization:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, {**REQUIRED_ENV, "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/"}, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -121,12 +107,7 @@ class TestURLNormalization:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090/",
-        }, clear=True):
+        with patch.dict(os.environ, {**REQUIRED_ENV, "PROMETHEUS_URL": "http://prometheus:9090/"}, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -138,9 +119,8 @@ class TestURLNormalization:
         get_settings.cache_clear()
 
         with patch.dict(os.environ, {
+            **REQUIRED_ENV,
             "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com///",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
             "PROMETHEUS_URL": "http://prometheus:9090//",
         }, clear=True):
             get_settings.cache_clear()
@@ -163,6 +143,9 @@ class TestRequiredFields:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
             )
 
         assert "azure_openai_endpoint" in str(exc_info.value)
@@ -177,6 +160,9 @@ class TestRequiredFields:
                 azure_openai_endpoint="https://test.openai.azure.com",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
             )
 
         assert "azure_openai_api_key" in str(exc_info.value)
@@ -191,6 +177,9 @@ class TestRequiredFields:
                 azure_openai_endpoint="https://test.openai.azure.com",
                 azure_openai_api_key="test-key",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
             )
 
         assert "azure_openai_deployment_name" in str(exc_info.value)
@@ -205,9 +194,63 @@ class TestRequiredFields:
                 azure_openai_endpoint="https://test.openai.azure.com",
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
             )
 
         assert "prometheus_url" in str(exc_info.value)
+
+    def test_missing_smtp_host_raises_error(self) -> None:
+        """Test that missing SMTP host raises error."""
+        from kube_medic.config import Settings
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(
+                _env_file=None,
+                azure_openai_endpoint="https://test.openai.azure.com",
+                azure_openai_api_key="test-key",
+                azure_openai_deployment_name="gpt-4o",
+                prometheus_url="http://prometheus:9090",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
+            )
+
+        assert "smtp_host" in str(exc_info.value)
+
+    def test_missing_email_from_raises_error(self) -> None:
+        """Test that missing EMAIL_FROM raises error."""
+        from kube_medic.config import Settings
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(
+                _env_file=None,
+                azure_openai_endpoint="https://test.openai.azure.com",
+                azure_openai_api_key="test-key",
+                azure_openai_deployment_name="gpt-4o",
+                prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_to="recipient@example.com",
+            )
+
+        assert "email_from" in str(exc_info.value)
+
+    def test_missing_email_to_raises_error(self) -> None:
+        """Test that missing EMAIL_TO raises error."""
+        from kube_medic.config import Settings
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(
+                _env_file=None,
+                azure_openai_endpoint="https://test.openai.azure.com",
+                azure_openai_api_key="test-key",
+                azure_openai_deployment_name="gpt-4o",
+                prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+            )
+
+        assert "email_to" in str(exc_info.value)
 
 
 class TestDefaultValues:
@@ -218,12 +261,7 @@ class TestDefaultValues:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -236,12 +274,7 @@ class TestDefaultValues:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -253,12 +286,7 @@ class TestDefaultValues:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -270,12 +298,7 @@ class TestDefaultValues:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -286,12 +309,7 @@ class TestDefaultValues:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-        }, clear=True):
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
@@ -318,6 +336,9 @@ class TestConfigValidation:
             azure_openai_api_key="test-key",
             azure_openai_deployment_name="gpt-4o",
             prometheus_url="http://prometheus:9090",
+            smtp_host="smtp.test.com",
+            email_from="test@example.com",
+            email_to="recipient@example.com",
             llm_temperature=0.0,
         )
 
@@ -333,6 +354,9 @@ class TestConfigValidation:
             azure_openai_api_key="test-key",
             azure_openai_deployment_name="gpt-4o",
             prometheus_url="http://prometheus:9090",
+            smtp_host="smtp.test.com",
+            email_from="test@example.com",
+            email_to="recipient@example.com",
             llm_temperature=2.0,
         )
 
@@ -343,13 +367,7 @@ class TestConfigValidation:
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
-            "LLM_TEMPERATURE": "0.5",
-        }, clear=True):
+        with patch.dict(os.environ, {**REQUIRED_ENV, "LLM_TEMPERATURE": "0.5"}, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
             assert settings.llm_temperature == 0.5
@@ -365,6 +383,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 llm_temperature=-0.5,
             )
 
@@ -379,6 +400,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 llm_temperature=2.5,
             )
 
@@ -393,6 +417,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 llm_temperature=5.0,
             )
 
@@ -407,6 +434,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 llm_max_tokens=0,
             )
 
@@ -421,6 +451,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 prometheus_timeout=0,
             )
 
@@ -435,6 +468,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 prometheus_max_series_results=-1,
             )
 
@@ -449,6 +485,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 k8s_logs_tail_lines=0,
             )
 
@@ -463,6 +502,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 k8s_logs_tail_lines=-10,
             )
 
@@ -477,6 +519,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 k8s_logs_max_chars=0,
             )
 
@@ -491,6 +536,9 @@ class TestConfigValidation:
                 azure_openai_api_key="test-key",
                 azure_openai_deployment_name="gpt-4o",
                 prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
                 text_truncate_max_length=0,
             )
 
@@ -504,10 +552,7 @@ class TestCustomValues:
         get_settings.cache_clear()
 
         with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
+            **REQUIRED_ENV,
             "LLM_TEMPERATURE": "0.7",
             "LLM_MAX_TOKENS": "4096",
         }, clear=True):
@@ -523,10 +568,7 @@ class TestCustomValues:
         get_settings.cache_clear()
 
         with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
+            **REQUIRED_ENV,
             "PROMETHEUS_TIMEOUT": "30",
             "PROMETHEUS_MAX_SERIES_RESULTS": "50",
         }, clear=True):
@@ -542,10 +584,7 @@ class TestCustomValues:
         get_settings.cache_clear()
 
         with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
+            **REQUIRED_ENV,
             "K8S_LOGS_TAIL_LINES": "100",
             "K8S_LOGS_MAX_CHARS": "5000",
         }, clear=True):
@@ -561,10 +600,7 @@ class TestCustomValues:
         get_settings.cache_clear()
 
         with patch.dict(os.environ, {
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-            "AZURE_OPENAI_API_KEY": "test-key",
-            "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
-            "PROMETHEUS_URL": "http://prometheus:9090",
+            **REQUIRED_ENV,
             "AZURE_OPENAI_API_VERSION": "2024-10-01",
         }, clear=True):
             get_settings.cache_clear()

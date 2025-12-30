@@ -196,33 +196,32 @@ class TestSupervisorSystemPrompt:
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
         assert "ROOT CAUSE" in SUPERVISOR_SYSTEM_PROMPT
-        assert "not just symptoms" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_has_investigation_steps(self) -> None:
-        """Test that prompt has investigation methodology."""
+        """Test that prompt has investigation steps."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "HOW TO INVESTIGATE" in SUPERVISOR_SYSTEM_PROMPT
-        assert "error trail" in SUPERVISOR_SYSTEM_PROMPT
+        assert "Investigation steps" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_discourages_stopping_early(self) -> None:
-        """Test that prompt tells agent not to stop and ask user."""
+    def test_prompt_has_efficiency_rules(self) -> None:
+        """Test that prompt has efficiency rules."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "Do NOT stop to ask" in SUPERVISOR_SYSTEM_PROMPT
+        assert "Efficient rules" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_has_key_principle(self) -> None:
         """Test that prompt emphasizes Running status doesn't mean healthy."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
         assert "Running" in SUPERVISOR_SYSTEM_PROMPT
-        assert "NOT mean healthy" in SUPERVISOR_SYSTEM_PROMPT
+        assert "NOT" in SUPERVISOR_SYSTEM_PROMPT
+        assert "healthy" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_mentions_response_format(self) -> None:
         """Test that prompt mentions response format."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "RESPONSE FORMAT" in SUPERVISOR_SYSTEM_PROMPT
+        assert "Response format" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_warns_against_auto_execute(self) -> None:
         """Test that prompt warns against auto-executing fixes."""
@@ -236,12 +235,12 @@ class TestSupervisorSystemPrompt:
 
         assert "kubectl commands" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_has_ingress_connectivity_guidance(self) -> None:
-        """Test that prompt has ingress connectivity testing guidance."""
+    def test_prompt_mentions_email_expert(self) -> None:
+        """Test that prompt mentions email expert and always sending report."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "ingress hostname" in SUPERVISOR_SYSTEM_PROMPT
-        assert "never internal IPs" in SUPERVISOR_SYSTEM_PROMPT
+        assert "ask_email_expert" in SUPERVISOR_SYSTEM_PROMPT
+        assert "ALWAYS" in SUPERVISOR_SYSTEM_PROMPT
 
 
 class TestCreateSupervisorAgent:
@@ -249,6 +248,7 @@ class TestCreateSupervisorAgent:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
@@ -259,6 +259,7 @@ class TestCreateSupervisorAgent:
             mock_create_k8s,
             mock_create_prom,
             mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -267,6 +268,7 @@ class TestCreateSupervisorAgent:
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
         mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -276,9 +278,11 @@ class TestCreateSupervisorAgent:
         mock_create_k8s.assert_called_once()
         mock_create_prom.assert_called_once()
         mock_create_net.assert_called_once()
+        mock_create_email.assert_called_once()
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
@@ -289,6 +293,7 @@ class TestCreateSupervisorAgent:
             mock_create_k8s,
             mock_create_prom,
             mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -296,6 +301,8 @@ class TestCreateSupervisorAgent:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
         mock_checkpointer = MagicMock()
         mock_saver.return_value = mock_checkpointer
@@ -311,6 +318,8 @@ class TestCreateSupervisorAgent:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -319,6 +328,8 @@ class TestCreateSupervisorAgent:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -326,6 +337,8 @@ class TestCreateSupervisorAgent:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -339,6 +352,8 @@ class TestCreateSupervisorAgent:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -347,6 +362,8 @@ class TestCreateSupervisorAgent:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -355,6 +372,8 @@ class TestCreateSupervisorAgent:
         mock_get_llm.return_value = mock_llm
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -366,6 +385,8 @@ class TestCreateSupervisorAgent:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -374,6 +395,8 @@ class TestCreateSupervisorAgent:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -381,6 +404,8 @@ class TestCreateSupervisorAgent:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import (
@@ -395,24 +420,27 @@ class TestCreateSupervisorAgent:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
-    def test_creates_agent_with_three_tools(
+    def test_creates_agent_with_four_tools(
             self,
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
             mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
-        """Test that supervisor is created with exactly three agent tools."""
+        """Test that supervisor is created with exactly four agent tools."""
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
         mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -421,10 +449,11 @@ class TestCreateSupervisorAgent:
 
         call_kwargs = mock_create_agent.call_args[1]
         tools = call_kwargs["tools"]
-        assert len(tools) == 3
+        assert len(tools) == 4
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
@@ -435,6 +464,7 @@ class TestCreateSupervisorAgent:
             mock_create_k8s,
             mock_create_prom,
             mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -443,6 +473,7 @@ class TestCreateSupervisorAgent:
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
         mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -454,11 +485,14 @@ class TestCreateSupervisorAgent:
         tool_names = [t.name for t in tools]
 
         assert "ask_kubernetes_expert" in tool_names
-        assert "ask_network_expert" in tool_names
         assert "ask_prometheus_expert" in tool_names
+        assert "ask_network_expert" in tool_names
+        assert "ask_email_expert" in tool_names
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -467,6 +501,8 @@ class TestCreateSupervisorAgent:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -474,6 +510,8 @@ class TestCreateSupervisorAgent:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_supervisor = MagicMock()
         mock_create_agent.return_value = mock_supervisor
 
@@ -489,6 +527,8 @@ class TestSupervisorToolDelegation:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -497,6 +537,8 @@ class TestSupervisorToolDelegation:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -513,6 +555,8 @@ class TestSupervisorToolDelegation:
         mock_create_k8s.return_value = mock_k8s_agent
 
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -533,6 +577,8 @@ class TestSupervisorToolDelegation:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -541,12 +587,16 @@ class TestSupervisorToolDelegation:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
         """Test that ask_prometheus_expert delegates to prometheus agent."""
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
 
         # Create mock prometheus agent
         mock_prom_agent = MagicMock()
@@ -581,6 +631,8 @@ class TestSupervisorToolSchemas:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -589,6 +641,8 @@ class TestSupervisorToolSchemas:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -596,6 +650,8 @@ class TestSupervisorToolSchemas:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent, AgentQueryInput
@@ -610,6 +666,8 @@ class TestSupervisorToolSchemas:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -618,6 +676,8 @@ class TestSupervisorToolSchemas:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -625,6 +685,8 @@ class TestSupervisorToolSchemas:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent
@@ -640,6 +702,8 @@ class TestSupervisorToolSchemas:
 
     @patch("kube_medic.agents.supervisor.InMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
+    @patch("kube_medic.agents.supervisor.create_email_agent")
+    @patch("kube_medic.agents.supervisor.create_network_agent")
     @patch("kube_medic.agents.supervisor.create_prometheus_agent")
     @patch("kube_medic.agents.supervisor.create_kubernetes_agent")
     @patch("kube_medic.agents.supervisor.get_llm")
@@ -648,6 +712,8 @@ class TestSupervisorToolSchemas:
             mock_get_llm,
             mock_create_k8s,
             mock_create_prom,
+            mock_create_net,
+            mock_create_email,
             mock_create_agent,
             mock_saver,
     ) -> None:
@@ -655,6 +721,8 @@ class TestSupervisorToolSchemas:
         mock_get_llm.return_value = MagicMock()
         mock_create_k8s.return_value = MagicMock()
         mock_create_prom.return_value = MagicMock()
+        mock_create_net.return_value = MagicMock()
+        mock_create_email.return_value = MagicMock()
         mock_create_agent.return_value = MagicMock()
 
         from kube_medic.agents.supervisor import create_supervisor_agent

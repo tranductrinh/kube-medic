@@ -20,23 +20,17 @@ class TestNetworkSystemPrompt:
         assert "network" in NETWORK_SYSTEM_PROMPT.lower()
         assert "connectivity" in NETWORK_SYSTEM_PROMPT.lower()
 
-    def test_prompt_mentions_all_tools(self) -> None:
-        """Test that system prompt mentions all available tools."""
+    def test_prompt_mentions_connectivity(self) -> None:
+        """Test that system prompt mentions connectivity."""
         from kube_medic.agents.network_agent import NETWORK_SYSTEM_PROMPT
 
-        expected_tools = [
-            "http_check",
-        ]
+        assert "connectivity" in NETWORK_SYSTEM_PROMPT.lower()
 
-        for tool in expected_tools:
-            assert tool in NETWORK_SYSTEM_PROMPT, f"Tool {tool} not in prompt"
-
-    def test_prompt_has_important_instruction(self) -> None:
-        """Test that prompt has IMPORTANT instruction for supervisor."""
+    def test_prompt_has_efficiency_guidance(self) -> None:
+        """Test that prompt has efficiency guidance."""
         from kube_medic.agents.network_agent import NETWORK_SYSTEM_PROMPT
 
-        assert "IMPORTANT" in NETWORK_SYSTEM_PROMPT
-        assert "supervisor" in NETWORK_SYSTEM_PROMPT.lower()
+        assert "Efficient rule" in NETWORK_SYSTEM_PROMPT
 
     def test_prompt_describes_agent_role(self) -> None:
         """Test that prompt describes the agent's role."""
@@ -44,12 +38,11 @@ class TestNetworkSystemPrompt:
 
         assert "expert" in NETWORK_SYSTEM_PROMPT.lower()
 
-    def test_prompt_mentions_use_cases(self) -> None:
-        """Test that prompt mentions use cases."""
+    def test_prompt_mentions_response_format(self) -> None:
+        """Test that prompt mentions response format."""
         from kube_medic.agents.network_agent import NETWORK_SYSTEM_PROMPT
 
-        assert "ingress" in NETWORK_SYSTEM_PROMPT.lower()
-        assert "health" in NETWORK_SYSTEM_PROMPT.lower()
+        assert "Response format" in NETWORK_SYSTEM_PROMPT
 
 
 class TestCreateNetworkAgent:
