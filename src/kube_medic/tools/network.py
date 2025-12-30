@@ -8,12 +8,11 @@ Tools:
 """
 
 import requests
-from requests.exceptions import RequestException
-
-from kube_medic.config import get_settings
-from kube_medic.logging_config import get_logger
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+from requests.exceptions import RequestException
+
+from kube_medic.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -53,11 +52,11 @@ class HttpCheckInput(BaseModel):
 
 @tool(args_schema=HttpCheckInput)
 def http_check(
-    url: str,
-    method: str = "GET",
-    timeout: int = 10,
-    follow_redirects: bool = True,
-    verify_ssl: bool = True,
+        url: str,
+        method: str = "GET",
+        timeout: int = 10,
+        follow_redirects: bool = True,
+        verify_ssl: bool = True,
 ) -> str:
     """
     Check if an HTTP/HTTPS endpoint is accessible.

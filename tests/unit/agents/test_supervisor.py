@@ -191,17 +191,32 @@ class TestSupervisorSystemPrompt:
 
         assert "ask_network_expert" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_describes_workflow(self) -> None:
-        """Test that prompt describes the workflow."""
+    def test_prompt_focuses_on_root_cause(self) -> None:
+        """Test that prompt emphasizes finding root cause."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "WORKFLOW" in SUPERVISOR_SYSTEM_PROMPT
+        assert "ROOT CAUSE" in SUPERVISOR_SYSTEM_PROMPT
+        assert "not just symptoms" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_has_guidelines(self) -> None:
-        """Test that prompt has guidelines."""
+    def test_prompt_has_investigation_steps(self) -> None:
+        """Test that prompt has investigation methodology."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "GUIDELINES" in SUPERVISOR_SYSTEM_PROMPT
+        assert "HOW TO INVESTIGATE" in SUPERVISOR_SYSTEM_PROMPT
+        assert "error trail" in SUPERVISOR_SYSTEM_PROMPT
+
+    def test_prompt_discourages_stopping_early(self) -> None:
+        """Test that prompt tells agent not to stop and ask user."""
+        from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
+
+        assert "Do NOT stop to ask" in SUPERVISOR_SYSTEM_PROMPT
+
+    def test_prompt_has_key_principle(self) -> None:
+        """Test that prompt emphasizes Running status doesn't mean healthy."""
+        from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
+
+        assert "Running" in SUPERVISOR_SYSTEM_PROMPT
+        assert "NOT mean healthy" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_mentions_response_format(self) -> None:
         """Test that prompt mentions response format."""
@@ -209,26 +224,24 @@ class TestSupervisorSystemPrompt:
 
         assert "RESPONSE FORMAT" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_warns_against_auto_fix(self) -> None:
-        """Test that prompt warns against automatic fixes."""
+    def test_prompt_warns_against_auto_execute(self) -> None:
+        """Test that prompt warns against auto-executing fixes."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "NEVER try to fix" in SUPERVISOR_SYSTEM_PROMPT
+        assert "never auto-execute" in SUPERVISOR_SYSTEM_PROMPT
 
-    def test_prompt_mentions_conversation_context(self) -> None:
-        """Test that prompt mentions conversation context/memory."""
+    def test_prompt_requires_specific_commands(self) -> None:
+        """Test that prompt requires specific kubectl commands in fix."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "conversation" in SUPERVISOR_SYSTEM_PROMPT.lower()
-        assert "context" in SUPERVISOR_SYSTEM_PROMPT.lower()
+        assert "kubectl commands" in SUPERVISOR_SYSTEM_PROMPT
 
     def test_prompt_has_ingress_connectivity_guidance(self) -> None:
         """Test that prompt has ingress connectivity testing guidance."""
         from kube_medic.agents.supervisor import SUPERVISOR_SYSTEM_PROMPT
 
-        assert "INGRESS CONNECTIVITY TESTING" in SUPERVISOR_SYSTEM_PROMPT
-        assert "INGRESS HOSTNAME" in SUPERVISOR_SYSTEM_PROMPT
-        assert "NEVER use internal cluster IPs" in SUPERVISOR_SYSTEM_PROMPT
+        assert "ingress hostname" in SUPERVISOR_SYSTEM_PROMPT
+        assert "never internal IPs" in SUPERVISOR_SYSTEM_PROMPT
 
 
 class TestCreateSupervisorAgent:
