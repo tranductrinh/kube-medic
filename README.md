@@ -103,13 +103,61 @@ python -m kube_medic.main
 
 ## Example Queries
 
+### Cluster Health & Overview
 ```
-"Check cluster health"
-"What pods are running in the monitoring-system namespace?"
-"Which pod has the most restarts?"
-"Show me the logs for that pod"
-"What's using the most CPU?"
-"Are there any errors in the events?"
+"Check overall cluster health"
+"Are all nodes healthy?"
+"Show me the cluster namespaces"
+```
+
+### Pod Troubleshooting
+```
+"What pods are crashing in the default namespace?"
+"Show me pods with high restart counts"
+"Get the logs for pod nginx-abc123 in production"
+"Why is my pod stuck in Pending state?"
+```
+
+### Resource Usage (Prometheus)
+```
+"Which pods are using the most CPU right now?"
+"Show memory usage trends for the last hour"
+"Are there any pods near their resource limits?"
+"What's the CPU usage trend for the monitoring namespace?"
+```
+
+### Deployments & Services
+```
+"List all deployments and their replica status"
+"Are all deployments healthy?"
+"Show me the services in kube-system namespace"
+```
+
+### Events & Debugging
+```
+"Are there any warning events in the cluster?"
+"Show recent events for pod my-app-xyz"
+"What scheduling issues are happening?"
+```
+
+### Nodes
+```
+"Show node capacity and allocatable resources"
+"Are there any node conditions I should worry about?"
+"Which nodes have taints?"
+```
+
+### Configuration
+```
+"List ConfigMaps in the default namespace"
+"What secrets exist in production?"
+```
+
+### Multi-Step Investigation (uses conversation memory)
+```
+"Which namespace has the most pod restarts?"
+"Show me the events for that namespace"
+"Get logs from the pod with most restarts"
 ```
 
 ## Running Tests
