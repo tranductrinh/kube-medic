@@ -5,8 +5,9 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 ## Features
 
 - **Multi-Agent Architecture**: Supervisor coordinates specialist agents
-- **Kubernetes**: Query pods, logs, events, and more
+- **Kubernetes**: Query pods, logs, events, ingresses, and more
 - **Prometheus**: Query metrics via PromQL (instant and range queries)
+- **Network**: HTTP connectivity checks for ingress/endpoint verification
 - **Conversation Memory**: Maintains context across questions
 
 ## Architecture
@@ -18,14 +19,14 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 │   (Has conversation memory)             │
 └─────────────┬───────────────────────────┘
               │
-    ┌─────────┴─────────┐
-    ▼                   ▼
-┌───────────┐     ┌──────────────┐
-│    K8s    │     │  Prometheus  │
-│   Agent   │     │   Agent      │
-│           │     │              │
-│ 12 tools  │     │ 2 tools      │
-└───────────┘     └──────────────┘
+    ┌─────────┼─────────┬─────────────┐
+    ▼         ▼         ▼             │
+┌───────┐ ┌───────┐ ┌─────────┐       │
+│  K8s  │ │ Prom  │ │ Network │       │
+│ Agent │ │ Agent │ │  Agent  │       │
+│       │ │       │ │         │       │
+│12 tool│ │2 tools│ │ 1 tool  │       │
+└───────┘ └───────┘ └─────────┘       │
 ```
 
 ### Kubernetes Agent Tools (READ-ONLY)
@@ -51,6 +52,12 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
 |------|-------------|
 | `prometheus_query` | Execute PromQL instant queries |
 | `prometheus_query_range` | Execute PromQL range queries for trend analysis |
+
+### Network Agent Tools
+
+| Tool | Description |
+|------|-------------|
+| `http_check` | Check HTTP/HTTPS endpoint accessibility (status code, response time, redirects) |
 
 ## Prerequisites
 
@@ -134,6 +141,14 @@ python -m kube_medic.main
 "Show me the services in kube-system namespace"
 "What ingresses are configured in the cluster?"
 "Show me the routing rules for my-app ingress"
+```
+
+### Connectivity Checks (Network Agent)
+```
+"Check if https://api.example.com/health is accessible"
+"Verify the ingress endpoint is responding"
+"What's the response time for my-service endpoint?"
+"Is the SSL certificate valid for my domain?"
 ```
 
 ### Events & Debugging

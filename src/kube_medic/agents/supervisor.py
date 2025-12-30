@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from kube_medic.agents.kubernetes_agent import create_kubernetes_agent
 from kube_medic.agents.prometheus_agent import create_prometheus_agent
+from kube_medic.agents.network_agent import create_network_agent
 from kube_medic.logging_config import get_logger
 from kube_medic.utils.helpers import get_llm
 
@@ -66,12 +67,13 @@ def run_agent(agent, request: str) -> str:
 # SUPERVISOR SYSTEM PROMPT
 # =============================================================================
 
-SUPERVISOR_SYSTEM_PROMPT = """You are a Kubernetes troubleshooting supervisor. You coordinate 
+SUPERVISOR_SYSTEM_PROMPT = """You are a Kubernetes troubleshooting supervisor. You coordinate
 specialist agents to diagnose cluster issues.
 
 YOUR TEAM:
-1. ask_kubernetes_expert - For pod status, logs, events, and K8s resources
+1. ask_kubernetes_expert - For pod status, logs, events, ingresses, and K8s resources
 2. ask_prometheus_expert - For CPU/memory usage, restarts, and performance metrics (via PromQL)
+3. ask_network_expert - For HTTP connectivity checks and endpoint accessibility
 
 WORKFLOW:
 1. Understand what the user is asking
@@ -83,7 +85,15 @@ GUIDELINES:
 - For general health checks: Start with Prometheus expert for overview
 - For specific pod issues: Use K8s expert for logs/events, Prometheus expert for resources
 - For performance issues: Use Prometheus expert first, then K8s for details
-- You can consult BOTH experts if needed for a complete picture
+- For ingress/connectivity: Use K8s expert to get ingress info, then Network expert to verify accessibility
+- You can consult MULTIPLE experts if needed for a complete picture
+
+INGRESS CONNECTIVITY TESTING:
+When verifying ingress accessibility:
+1. Use the INGRESS HOSTNAME for connectivity checks
+2. NEVER use internal cluster IPs (ClusterIP, LoadBalancer internal IP, Pod IP)
+3. Internal IPs are not accessible from outside the cluster - end users access via hostnames
+4. Format the URL properly: http(s)://hostname + path from ingress rules
 
 RESPONSE FORMAT:
 - Summarize findings clearly
@@ -123,6 +133,7 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
     logger.debug("Initializing specialist agents...")
     kubernetes_agent = create_kubernetes_agent()
     prometheus_agent = create_prometheus_agent()
+    network_agent = create_network_agent()
 
     # -------------------------------------------------------------------------
     # Wrap specialists as tools
@@ -139,7 +150,7 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
         - Container logs and errors
         - Kubernetes events and warnings
         - Namespace and resource structure
-        - Deployment issues
+        - Deployment and ingress configuration
 
         Example: "Check if any pods are crashing in the monitoring-system namespace"
         """
@@ -163,8 +174,25 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
         logger.debug("Delegating to Prometheus expert")
         return run_agent(prometheus_agent, request)
 
+    @tool(args_schema=AgentQueryInput)
+    def ask_network_expert(request: str) -> str:
+        """
+        Delegate a question to the Network Specialist Agent.
+
+        Use this for questions about:
+        - HTTP/HTTPS endpoint accessibility
+        - Ingress connectivity verification
+        - Response time measurements
+        - SSL certificate issues
+        - API endpoint health checks
+
+        Example: "Check if https://api.example.com/health is accessible"
+        """
+        logger.debug("Delegating to Network expert")
+        return run_agent(network_agent, request)
+
     # Agent tools for supervisor
-    agent_tools = [ask_kubernetes_expert, ask_prometheus_expert]
+    agent_tools = [ask_kubernetes_expert, ask_prometheus_expert, ask_network_expert]
 
     # Create checkpointer for memory (if enabled)
     checkpointer = InMemorySaver() if use_memory else None

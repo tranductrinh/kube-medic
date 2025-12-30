@@ -4,6 +4,7 @@ Tools package for KubeMedic.
 This package contains all tools that agents can use:
 - kubernetes: K8s API tools (pods, nodes, deployments, services, ingresses, events, logs, configmaps, secrets)
 - prometheus: PromQL tools (instant queries, range queries)
+- network: HTTP connectivity tools (endpoint checks)
 """
 
 from kube_medic.tools.kubernetes import (
@@ -26,6 +27,10 @@ from kube_medic.tools.prometheus import (
     prometheus_query,
     prometheus_query_range,
 )
+from kube_medic.tools.network import (
+    network_tools,
+    http_check,
+)
 
 __all__ = [
     # Kubernetes
@@ -46,4 +51,7 @@ __all__ = [
     "prometheus_tools",
     "prometheus_query",
     "prometheus_query_range",
+    # Network
+    "network_tools",
+    "http_check",
 ]
