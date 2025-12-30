@@ -36,32 +36,7 @@ case $CMD in
         pytest tests/ -v --cov=src/kube_medic --cov-report=html --cov-report=term
         echo -e "${GREEN}Coverage report generated: htmlcov/index.html${NC}"
         ;;
-    watch)
-        echo -e "${BLUE}Running tests in watch mode (auto-rerun on file changes)${NC}"
-        echo "Install pytest-watch: pip install pytest-watch"
-        ptw tests/ -- -v -m "not integration"
-        ;;
-    config)
-        echo -e "${BLUE}Testing configuration only${NC}"
-        pytest tests/ -v -k TestConfig
-        ;;
-    logging)
-        echo -e "${BLUE}Testing logging only${NC}"
-        pytest tests/ -v -k TestLogging
-        ;;
-    k8s)
-        echo -e "${BLUE}Testing Kubernetes tools only${NC}"
-        pytest tests/ -v -k TestKubernetes
-        ;;
-    prom)
-        echo -e "${BLUE}Testing Prometheus tools only${NC}"
-        pytest tests/ -v -k TestPrometheus
-        ;;
-    quick)
-        echo -e "${BLUE}Quick test run (fastest)${NC}"
-        pytest tests/ -v -m "not integration" -x
-        ;;
-    *)
+    help)
         echo -e "${YELLOW}Usage: ./run_tests.sh [option]${NC}"
         echo ""
         echo "Options:"
@@ -69,13 +44,6 @@ case $CMD in
         echo "  integration   - Run integration tests only"
         echo "  all           - Run all tests (unit + integration)"
         echo "  coverage      - Run with coverage report"
-        echo "  watch         - Run in watch mode (requires pytest-watch)"
-        echo "  config        - Test configuration only"
-        echo "  logging       - Test logging only"
-        echo "  k8s           - Test Kubernetes tools only"
-        echo "  prom          - Test Prometheus tools only"
-        echo "  quick         - Quick test run (stop on first failure)"
-        echo ""
         echo "Examples:"
         echo "  ./run_tests.sh unit       # Run unit tests"
         echo "  ./run_tests.sh all        # Run all tests"

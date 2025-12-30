@@ -1,5 +1,13 @@
 """
-Helper functions.
+Helper functions for KubeMedic.
+
+This module provides:
+- get_llm: LLM singleton factory (Azure OpenAI)
+- ask_agent: Send queries to agents and get responses
+- stream_agent: Stream agent responses with real-time output
+- format_error: Format exceptions for display
+- truncate_text: Truncate text to max length
+- parse_relative_time: Parse time strings like '1h', '30m', 'now'
 """
 
 import re

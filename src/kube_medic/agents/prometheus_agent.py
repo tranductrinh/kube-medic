@@ -1,6 +1,6 @@
 """
-Prometheus Agent: Handles metrics and health queries
-This agent is "workers" that the supervisor delegates to.
+Prometheus Agent: Handles PromQL queries for metrics and performance analysis.
+This agent is a "worker" that the supervisor delegates to.
 """
 
 from langchain.agents import create_agent
@@ -38,10 +38,8 @@ def create_prometheus_agent() -> Runnable:
     Create the Prometheus specialist agent.
 
     This agent handles:
-    - Cluster health checks
-    - CPU/memory metrics
-    - Restart counts
-    - Custom PromQL queries
+    - PromQL instant queries (current metrics)
+    - PromQL range queries (trend analysis over time)
 
     Returns:
         A LangChain agent configured for metrics analysis

@@ -115,7 +115,7 @@ python -m kube_medic.main
 ## Running Tests
 
 ```bash
-# Unit tests only
+# Unit tests only (default)
 ./run_tests.sh unit
 
 # Integration tests (requires .env + services)
@@ -124,13 +124,6 @@ python -m kube_medic.main
 # All tests
 ./run_tests.sh all
 
-# Specific component
-./run_tests.sh config      # Configuration tests
-./run_tests.sh logging     # Logging tests
-./run_tests.sh k8s         # Kubernetes tools tests
-./run_tests.sh prom        # Prometheus tools tests
-
 # With coverage report
 ./run_tests.sh coverage
-```
 

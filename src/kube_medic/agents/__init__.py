@@ -2,7 +2,8 @@
 Agents package for KubeMedic.
 
 This package contains:
-- specialists: Kubernetes and Prometheus specialist agents
+- kubernetes_agent: Kubernetes specialist for K8s resource queries
+- prometheus_agent: Prometheus specialist for PromQL metrics queries
 - supervisor: The main supervisor agent that coordinates specialists
 
 Usage:

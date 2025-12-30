@@ -179,10 +179,8 @@ class TestIntegrationAgentCreation:
 
     def test_specialist_agents_creation(self) -> None:
         """Test that specialist agents can be created."""
-        from kube_medic.agents.specialists import (
-            create_kubernetes_agent,
-            create_prometheus_agent,
-        )
+        from kube_medic.agents.kubernetes_agent import create_kubernetes_agent
+        from kube_medic.agents.prometheus_agent import create_prometheus_agent
 
         k8s_agent = create_kubernetes_agent()
         prometheus_agent = create_prometheus_agent()
@@ -200,7 +198,7 @@ class TestIntegrationAgentCreation:
 
     def test_llm_instance_singleton(self) -> None:
         """Test that LLM instance uses singleton pattern."""
-        from kube_medic.agents.specialists import get_llm
+        from kube_medic.utils.helpers import get_llm
 
         llm1 = get_llm()
         llm2 = get_llm()

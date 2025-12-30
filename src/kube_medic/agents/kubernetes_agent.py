@@ -1,6 +1,6 @@
 """
-Kubernetes Agent: Handles pod, log, and event queries
-This agent is "workers" that the supervisor delegates to.
+Kubernetes Agent: Handles K8s resource queries (pods, nodes, deployments, events, etc.)
+This agent is a "worker" that the supervisor delegates to.
 """
 
 from langchain.agents import create_agent
@@ -47,10 +47,12 @@ def create_kubernetes_agent() -> Runnable:
     Create the Kubernetes specialist agent.
 
     This agent handles:
-    - Pod listing and details
-    - Log retrieval
-    - Event queries
-    - Namespace exploration
+    - Pod listing, details, and logs
+    - Node status and details
+    - Deployment status
+    - Events (scheduling, crashes, etc.)
+    - ConfigMaps and Secrets (names/keys only)
+    - Services and namespaces
 
     Returns:
         A LangChain agent configured for K8s troubleshooting
