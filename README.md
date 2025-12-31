@@ -31,45 +31,10 @@ An AI-powered Kubernetes troubleshooting assistant built with LangChain.
   └─────────┘   └─────────┘ └─────────┘ └─────────┘
 ```
 
-### Kubernetes Agent Tools (READ-ONLY)
-
-| Tool               | Description                                       |
-|--------------------|---------------------------------------------------|
-| `get_events`       | Get Kubernetes events (scheduling, crashes, etc.) |
-| `get_node_details` | Get node capacity, conditions, and taints         |
-| `get_pod_details`  | Get detailed information about a specific pod     |
-| `get_pod_logs`     | Retrieve logs from a pod/container                |
-| `list_configmaps`  | List ConfigMaps (keys only, not values)           |
-| `list_deployments` | List deployments with replica status              |
-| `list_ingresses`   | List ingresses with routing rules and backends    |
-| `list_namespaces`  | List all namespaces in the cluster                |
-| `list_nodes`       | List cluster nodes with status                    |
-| `list_pods`        | List pods with status and restart counts          |
-| `list_secrets`     | List Secret names (not values)                    |
-| `list_services`    | List services with types and endpoints            |
-
-### Prometheus Agent Tools
-
-| Tool                     | Description                                     |
-|--------------------------|-------------------------------------------------|
-| `prometheus_query`       | Execute PromQL instant queries                  |
-| `prometheus_query_range` | Execute PromQL range queries for trend analysis |
-
-### Network Agent Tools
-
-| Tool         | Description                                                                     |
-|--------------|---------------------------------------------------------------------------------|
-| `http_check` | Check HTTP/HTTPS endpoint accessibility (status code, response time, redirects) |
-
-### Email Agent Tools
-
-| Tool         | Description                                         |
-|--------------|-----------------------------------------------------|
-| `send_email` | Send email notifications with investigation results |
+See [TOOLS.md](TOOLS.md) for detailed tool documentation.
 
 ## Prerequisites
 
-- macOS (development tested)
 - Python 3.12+
 - Access to a Kubernetes cluster (kubeconfig or in-cluster)
 - Prometheus instance
@@ -101,15 +66,15 @@ cp .env.example .env
 
 Required environment variables:
 
-| Variable                       | Description                              |
-|--------------------------------|------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI endpoint URL                |
-| `AZURE_OPENAI_API_KEY`         | Azure OpenAI API key                     |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name (e.g., gpt-4o)     |
-| `PROMETHEUS_URL`               | Prometheus server URL                    |
+| Variable                       | Description                                 |
+|--------------------------------|---------------------------------------------|
+| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI endpoint URL                   |
+| `AZURE_OPENAI_API_KEY`         | Azure OpenAI API key                        |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name (e.g., gpt-4o)        |
+| `PROMETHEUS_URL`               | Prometheus server URL                       |
 | `SMTP_HOST`                    | SMTP server hostname (e.g., smtp.gmail.com) |
-| `EMAIL_FROM`                   | Sender email address                     |
-| `EMAIL_TO`                     | Recipient for all investigation reports  |
+| `EMAIL_FROM`                   | Sender email address                        |
+| `EMAIL_TO`                     | Recipient for all investigation reports     |
 
 The server will fail to start if required variables are missing. See `.env.example` for all options.
 
@@ -118,6 +83,8 @@ The server will fail to start if required variables are missing. See `.env.examp
 KubeMedic runs as a REST API server that accepts webhooks for automated incident investigation. The webhook endpoint
 accepts any JSON payload and intelligently processes it.
 
+### Running Locally
+
 ```bash
 # Start the API server
 kube-medic
@@ -125,6 +92,21 @@ kube-medic
 # Or directly
 python -m kube_medic.api
 ```
+
+### Running with Docker
+
+```bash
+# Build the image
+docker build -t kube-medic .
+
+# Run with environment file and kubeconfig mounted
+docker run -p 8000:8000 \
+  --env-file .env \
+  -v ~/.kube/config:/home/appuser/.kube/config:ro \
+  kube-medic
+```
+
+> **Note:** The container runs as non-root user `appuser`. Mount kubeconfig to `/home/appuser/.kube/config`.
 
 ### API Endpoints
 
@@ -135,46 +117,176 @@ python -m kube_medic.api
 | `/webhook/sync` | POST   | Generic webhook (waits for agent response)                           |
 | `/query`        | POST   | Direct agent query                                                   |
 
+**Async vs Sync Webhooks:**
+
+- `/webhook` (async): Returns immediately with `{"status": "ok"}`. The agent investigates in the background and sends
+  results via email to `EMAIL_TO`.
+- `/webhook/sync`: Blocks until investigation completes and returns the full response. Use for integrations that need
+  immediate results.
+
+**Query Parameters:**
+
+- `question` (required): The question or issue to investigate
+- `thread_id` (optional): Conversation identifier for maintaining context. Use the same `thread_id` to continue a
+  conversation across multiple queries. Omit for stateless queries.
+
 API documentation available at `http://localhost:8000/docs` (Swagger UI).
 
-### API Examples
+## Deployment
 
-```bash
-# Health check
-curl http://localhost:8000/health
+### In-Cluster Deployment
 
-# Direct query
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Why is my pod crashing?", "thread_id": "user-123"}'
+To deploy KubeMedic inside your Kubernetes cluster:
 
-# Generic webhook (any JSON)
-curl -X POST http://localhost:8000/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"issue": "High latency detected", "service": "api-gateway", "p99_ms": 2500}'
+#### 1. Create RBAC Resources
 
-# Alertmanager webhook
-curl -X POST http://localhost:8000/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "firing",
-    "alerts": [{
-      "status": "firing",
-      "labels": {
-        "alertname": "HighMemoryUsage",
-        "namespace": "production",
-        "pod": "my-app-xyz",
-        "severity": "warning"
-      },
-      "annotations": {
-        "description": "Pod memory usage exceeds 90%"
-      }
-    }]
-  }'
-
+```yaml
+# rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-medic
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-medic
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "pods", "pods/log", "services", "endpoints", "events", "nodes", "namespaces", "configmaps", "secrets" ]
+    verbs: [ "get", "list" ]
+  - apiGroups: [ "apps" ]
+    resources: [ "deployments", "replicasets", "statefulsets", "daemonsets" ]
+    verbs: [ "get", "list" ]
+  - apiGroups: [ "networking.k8s.io" ]
+    resources: [ "ingresses" ]
+    verbs: [ "get", "list" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-medic
+subjects:
+  - kind: ServiceAccount
+    name: kube-medic
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: kube-medic
+  apiGroup: rbac.authorization.k8s.io
 ```
 
-## Running Tests
+#### 2. Create Secret for Environment Variables
+
+```yaml
+# secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-medic
+  namespace: monitoring
+type: Opaque
+stringData:
+  AZURE_OPENAI_ENDPOINT: "https://your-resource.openai.azure.com/"
+  AZURE_OPENAI_API_KEY: "your-api-key"
+  AZURE_OPENAI_DEPLOYMENT_NAME: "gpt-4o"
+  PROMETHEUS_URL: "http://prometheus-server.monitoring:80"
+  SMTP_HOST: "smtp.gmail.com"
+  EMAIL_FROM: "kube-medic@example.com"
+  EMAIL_TO: "ops-team@example.com"
+```
+
+#### 3. Create Deployment and Service
+
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-medic
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-medic
+  template:
+    metadata:
+      labels:
+        app: kube-medic
+    spec:
+      serviceAccountName: kube-medic
+      containers:
+        - name: kube-medic
+          image: kube-medic:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: kube-medic
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-medic
+  namespace: monitoring
+spec:
+  selector:
+    app: kube-medic
+  ports:
+    - port: 8000
+      targetPort: 8000
+```
+
+#### 4. Apply Resources
+
+```bash
+kubectl apply -f rbac.yaml
+kubectl apply -f secret.yaml
+kubectl apply -f deployment.yaml
+```
+
+### Alertmanager Integration
+
+KubeMedic can receive alerts directly from Prometheus Alertmanager. Add a receiver to your `alertmanager.yml`:
+
+```yaml
+receivers:
+  - name: 'kube-medic'
+    webhook_configs:
+      - url: 'http://kube-medic.monitoring:8000/webhook'
+        send_resolved: false  # Optional: don't notify on resolution
+
+route:
+  receiver: 'default'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'kube-medic'
+```
+
+When an alert fires, KubeMedic will:
+
+1. Parse the alert payload (labels, annotations, status)
+2. Investigate using Kubernetes and Prometheus data
+3. Send a detailed analysis via email to `EMAIL_TO`
+
+## Development
+
+### Running Tests
 
 ```bash
 # Unit tests only (default)
