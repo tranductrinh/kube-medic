@@ -92,9 +92,7 @@ EMAIL_BODY_HTML = """<!DOCTYPE html>
                     <h2 style="margin: 0 0 8px 0; color: #616161; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
                       Evidence
                     </h2>
-                    <p style="margin: 0; color: #1a1a1a; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">
-                      {evidence}
-                    </p>
+                    <p style="margin: 0; color: #1a1a1a; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">{evidence}</p>
                   </td>
                 </tr>
               </table>
