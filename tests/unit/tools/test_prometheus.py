@@ -27,7 +27,9 @@ class TestGetPrometheusClient:
         prom_module._prom_client = None  # Reset singleton
 
         mock_settings.return_value = MagicMock(
-            prometheus_url="http://prometheus:9090"
+            prometheus_url="http://prometheus:9090",
+            prometheus_username="",
+            prometheus_password="",
         )
 
         from kube_medic.tools.prometheus import get_prometheus_client
@@ -36,6 +38,56 @@ class TestGetPrometheusClient:
 
         mock_prom_connect.assert_called_once_with(
             url="http://prometheus:9090",
+            headers=None,
+            disable_ssl=True,
+        )
+
+    @patch("kube_medic.tools.prometheus.PrometheusConnect")
+    @patch("kube_medic.tools.prometheus.get_settings")
+    def test_creates_client_with_basic_auth(self, mock_settings, mock_prom_connect) -> None:
+        """Test that client is created with basic auth headers when credentials are provided."""
+        import kube_medic.tools.prometheus as prom_module
+        prom_module._prom_client = None  # Reset singleton
+
+        mock_settings.return_value = MagicMock(
+            prometheus_url="http://prometheus:9090",
+            prometheus_username="admin",
+            prometheus_password="secret123",
+        )
+
+        from kube_medic.tools.prometheus import get_prometheus_client
+
+        client = get_prometheus_client()
+
+        # Verify PrometheusConnect was called with auth header
+        call_args = mock_prom_connect.call_args
+        assert call_args.kwargs["url"] == "http://prometheus:9090"
+        assert call_args.kwargs["disable_ssl"] is True
+        assert "headers" in call_args.kwargs
+        assert "Authorization" in call_args.kwargs["headers"]
+        # Base64 of "admin:secret123" is "YWRtaW46c2VjcmV0MTIz"
+        assert call_args.kwargs["headers"]["Authorization"] == "Basic YWRtaW46c2VjcmV0MTIz"
+
+    @patch("kube_medic.tools.prometheus.PrometheusConnect")
+    @patch("kube_medic.tools.prometheus.get_settings")
+    def test_creates_client_without_auth_when_only_username(self, mock_settings, mock_prom_connect) -> None:
+        """Test that client is created without auth when only username is provided."""
+        import kube_medic.tools.prometheus as prom_module
+        prom_module._prom_client = None  # Reset singleton
+
+        mock_settings.return_value = MagicMock(
+            prometheus_url="http://prometheus:9090",
+            prometheus_username="admin",
+            prometheus_password="",
+        )
+
+        from kube_medic.tools.prometheus import get_prometheus_client
+
+        client = get_prometheus_client()
+
+        mock_prom_connect.assert_called_once_with(
+            url="http://prometheus:9090",
+            headers=None,
             disable_ssl=True,
         )
 
@@ -47,7 +99,9 @@ class TestGetPrometheusClient:
         prom_module._prom_client = None  # Reset singleton
 
         mock_settings.return_value = MagicMock(
-            prometheus_url="http://prometheus:9090"
+            prometheus_url="http://prometheus:9090",
+            prometheus_username="",
+            prometheus_password="",
         )
 
         from kube_medic.tools.prometheus import get_prometheus_client

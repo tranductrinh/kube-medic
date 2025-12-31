@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     # =========================================================================
     # PROMETHEUS CONFIGURATION
     # =========================================================================
+    prometheus_username: str = Field(
+        default="",
+        description="Prometheus basic auth username (optional)",
+    )
+    prometheus_password: str = Field(
+        default="",
+        description="Prometheus basic auth password (optional)",
+    )
     prometheus_timeout: int = Field(
         default=10,
         description="Timeout in seconds for Prometheus API requests",

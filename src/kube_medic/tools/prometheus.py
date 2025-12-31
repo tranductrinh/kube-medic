@@ -6,6 +6,7 @@ This module provides tools for querying Prometheus:
 - prometheus_query_range: Execute PromQL range queries for trend analysis
 """
 
+import base64
 from datetime import datetime
 
 from langchain_core.tools import tool
@@ -35,8 +36,17 @@ def get_prometheus_client() -> PrometheusConnect:
     settings = get_settings()
     logger.info(f"Connecting to Prometheus at {settings.prometheus_url}")
 
+    # Build headers with basic auth if credentials are provided
+    headers: dict[str, str] = {}
+    if settings.prometheus_username and settings.prometheus_password:
+        credentials = f"{settings.prometheus_username}:{settings.prometheus_password}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        headers["Authorization"] = f"Basic {encoded}"
+        logger.info("Using basic authentication for Prometheus")
+
     _prom_client = PrometheusConnect(
         url=settings.prometheus_url,
+        headers=headers if headers else None,
         disable_ssl=True,
     )
 
