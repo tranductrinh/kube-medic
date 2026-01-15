@@ -85,12 +85,12 @@ class Settings(BaseSettings):
     # KUBERNETES CONFIGURATION
     # =========================================================================
     k8s_logs_tail_lines: int = Field(
-        default=50,
+        default=300,
         description="Number of log lines to retrieve from pod logs",
         gt=0,
     )
     k8s_logs_max_chars: int = Field(
-        default=3000,
+        default=40000,
         description="Maximum characters to keep when truncating pod logs",
         gt=0,
     )
