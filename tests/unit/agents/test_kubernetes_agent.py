@@ -40,6 +40,15 @@ class TestKubernetesSystemPrompt:
 
         assert "expert" in KUBERNETES_SYSTEM_PROMPT.lower()
 
+    def test_prompt_instructs_to_search_all_namespaces_first(self) -> None:
+        """Test that prompt instructs to search all namespaces when not specified."""
+        from kube_medic.agents.kubernetes_agent import KUBERNETES_SYSTEM_PROMPT
+
+        # The prompt should instruct not to assume namespace from application name
+        assert "namespace" in KUBERNETES_SYSTEM_PROMPT.lower()
+        assert "all namespaces" in KUBERNETES_SYSTEM_PROMPT.lower()
+        assert "Do NOT assume namespace" in KUBERNETES_SYSTEM_PROMPT
+
 
 class TestCreateKubernetesAgent:
     """Tests for create_kubernetes_agent function."""

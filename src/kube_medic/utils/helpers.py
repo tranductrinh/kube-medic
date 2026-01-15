@@ -82,7 +82,11 @@ def ask_agent(
         - Final response
     """
     logger.debug(f"[{thread_id}] Starting agent invocation")
-    config = {"configurable": {"thread_id": thread_id}}
+    settings = get_settings()
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": settings.agent_recursion_limit,
+    }
 
     final_response = ""
     tool_call_count = 0

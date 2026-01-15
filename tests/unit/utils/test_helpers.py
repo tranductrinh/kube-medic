@@ -325,7 +325,9 @@ class TestAskAgent:
             {"agent": {"messages": [mock_message]}}
         ]
 
-        result = ask_agent(mock_agent, "query")
+        with patch("kube_medic.utils.helpers.get_settings") as mock_settings:
+            mock_settings.return_value.agent_recursion_limit = 50
+            result = ask_agent(mock_agent, "query")
 
         assert result == "Investigation complete"
 
@@ -336,11 +338,28 @@ class TestAskAgent:
         mock_agent = MagicMock()
         mock_agent.stream.return_value = []
 
-        ask_agent(mock_agent, "query", thread_id="test-thread")
+        with patch("kube_medic.utils.helpers.get_settings") as mock_settings:
+            mock_settings.return_value.agent_recursion_limit = 50
+            ask_agent(mock_agent, "query", thread_id="test-thread")
 
         call_args = mock_agent.stream.call_args
         config = call_args[1]["config"]
         assert config["configurable"]["thread_id"] == "test-thread"
+
+    def test_uses_recursion_limit_from_config(self) -> None:
+        """Test that ask_agent passes recursion_limit from settings."""
+        from kube_medic.utils.helpers import ask_agent
+
+        mock_agent = MagicMock()
+        mock_agent.stream.return_value = []
+
+        with patch("kube_medic.utils.helpers.get_settings") as mock_settings:
+            mock_settings.return_value.agent_recursion_limit = 100
+            ask_agent(mock_agent, "query")
+
+        call_args = mock_agent.stream.call_args
+        config = call_args[1]["config"]
+        assert config["recursion_limit"] == 100
 
     def test_handles_tool_calls(self) -> None:
         """Test that ask_agent handles tool call messages."""
@@ -372,7 +391,9 @@ class TestAskAgent:
             {"agent": {"messages": [final_msg]}},
         ]
 
-        result = ask_agent(mock_agent, "query")
+        with patch("kube_medic.utils.helpers.get_settings") as mock_settings:
+            mock_settings.return_value.agent_recursion_limit = 50
+            result = ask_agent(mock_agent, "query")
 
         assert result == "Found pod nginx-abc123"
 
@@ -383,6 +404,8 @@ class TestAskAgent:
         mock_agent = MagicMock()
         mock_agent.stream.return_value = []
 
-        result = ask_agent(mock_agent, "query")
+        with patch("kube_medic.utils.helpers.get_settings") as mock_settings:
+            mock_settings.return_value.agent_recursion_limit = 50
+            result = ask_agent(mock_agent, "query")
 
         assert result == "No response from agent."

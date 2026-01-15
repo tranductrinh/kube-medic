@@ -105,6 +105,15 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # AGENT CONFIGURATION
+    # =========================================================================
+    agent_recursion_limit: int = Field(
+        default=50,
+        description="Maximum recursion depth for agent tool calls",
+        gt=0,
+    )
+
+    # =========================================================================
     # API SERVER CONFIGURATION
     # =========================================================================
     api_host: str = Field(

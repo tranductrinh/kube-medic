@@ -290,8 +290,8 @@ class TestDefaultValues:
             get_settings.cache_clear()
             settings = get_settings()
 
-            assert settings.k8s_logs_tail_lines == 50
-            assert settings.k8s_logs_max_chars == 3000
+            assert settings.k8s_logs_tail_lines == 300
+            assert settings.k8s_logs_max_chars == 40000
 
     def test_text_formatting_defaults(self) -> None:
         """Test text formatting default values."""
@@ -318,9 +318,21 @@ class TestDefaultValues:
             assert settings.llm_max_tokens == 2048
             assert settings.prometheus_timeout == 10
             assert settings.prometheus_max_series_results == 20
-            assert settings.k8s_logs_tail_lines == 50
-            assert settings.k8s_logs_max_chars == 3000
+            assert settings.k8s_logs_tail_lines == 300
+            assert settings.k8s_logs_max_chars == 40000
             assert settings.text_truncate_max_length == 500
+            assert settings.agent_recursion_limit == 50
+
+    def test_agent_defaults(self) -> None:
+        """Test agent default values."""
+        from kube_medic.config import get_settings
+        get_settings.cache_clear()
+
+        with patch.dict(os.environ, REQUIRED_ENV, clear=True):
+            get_settings.cache_clear()
+            settings = get_settings()
+
+            assert settings.agent_recursion_limit == 50
 
 
 class TestConfigValidation:
@@ -542,6 +554,40 @@ class TestConfigValidation:
                 text_truncate_max_length=0,
             )
 
+    def test_agent_recursion_limit_must_be_positive(self) -> None:
+        """Test that agent recursion limit must be positive (gt=0)."""
+        from kube_medic.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings(
+                _env_file=None,
+                azure_openai_endpoint="https://test.openai.azure.com",
+                azure_openai_api_key="test-key",
+                azure_openai_deployment_name="gpt-4o",
+                prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
+                agent_recursion_limit=0,
+            )
+
+    def test_agent_recursion_limit_rejects_negative(self) -> None:
+        """Test that agent recursion limit rejects negative values."""
+        from kube_medic.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings(
+                _env_file=None,
+                azure_openai_endpoint="https://test.openai.azure.com",
+                azure_openai_api_key="test-key",
+                azure_openai_deployment_name="gpt-4o",
+                prometheus_url="http://prometheus:9090",
+                smtp_host="smtp.test.com",
+                email_from="test@example.com",
+                email_to="recipient@example.com",
+                agent_recursion_limit=-10,
+            )
+
 
 class TestCustomValues:
     """Tests for custom (non-default) values from environment."""
@@ -607,3 +653,17 @@ class TestCustomValues:
             settings = get_settings()
 
             assert settings.azure_openai_api_version == "2024-10-01"
+
+    def test_custom_agent_recursion_limit(self) -> None:
+        """Test that custom agent recursion limit is applied."""
+        from kube_medic.config import get_settings
+        get_settings.cache_clear()
+
+        with patch.dict(os.environ, {
+            **REQUIRED_ENV,
+            "AGENT_RECURSION_LIMIT": "100",
+        }, clear=True):
+            get_settings.cache_clear()
+            settings = get_settings()
+
+            assert settings.agent_recursion_limit == 100

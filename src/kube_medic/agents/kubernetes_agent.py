@@ -31,8 +31,9 @@ Available tools:
 Efficient rules:
 - Call MULTIPLE tools in parallel when possible
 - For "check pods + logs + events": call list_pods, then get_pod_logs AND get_events together
-- Focus on unhealthy/crashing pods 
+- Focus on unhealthy/crashing pods
 - Return ONE comprehensive response with all findings
+- IMPORTANT: When namespace is NOT explicitly specified, ALWAYS search ALL namespaces first (leave namespace empty). Do NOT assume namespace from application name.
 
 Response format:
 - Resource status (what's healthy, what's not)
