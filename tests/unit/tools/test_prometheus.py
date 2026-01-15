@@ -36,6 +36,15 @@ class TestSanitizePromql:
         result = _sanitize_promql(query)
         assert result == 'rate(container.cpu.usage.seconds_total[5m])'
 
+    def test_removes_double_escaped_dots(self) -> None:
+        """Test that double-escaped dots (from JSON) are unescaped."""
+        from kube_medic.tools.prometheus import _sanitize_promql
+
+        # Double backslash as it might come from JSON parsing
+        query = 'up{job="kubernetes\\\\.pods"}'
+        result = _sanitize_promql(query)
+        assert result == 'up{job="kubernetes.pods"}'
+
     def test_preserves_normal_query(self) -> None:
         """Test that queries without escapes are unchanged."""
         from kube_medic.tools.prometheus import _sanitize_promql
@@ -53,6 +62,15 @@ class TestSanitizePromql:
         result = _sanitize_promql(query)
         # Should still have escaped quote but dots would be unescaped
         assert result == r'up{job="test\"value"}'
+
+    def test_handles_standalone_backslash(self) -> None:
+        """Test that standalone backslashes not before dots are preserved."""
+        from kube_medic.tools.prometheus import _sanitize_promql
+
+        query = r'up{path="C:\\temp"}'
+        result = _sanitize_promql(query)
+        # Backslash not before dot should be preserved
+        assert result == r'up{path="C:\\temp"}'
 
 
 class TestGetPrometheusClient:

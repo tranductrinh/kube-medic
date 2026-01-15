@@ -7,6 +7,7 @@ This module provides tools for querying Prometheus:
 """
 
 import base64
+import re
 from datetime import datetime
 
 from langchain_core.tools import tool
@@ -61,10 +62,15 @@ def _sanitize_promql(query: str) -> str:
     LLMs sometimes escape dots (\\.) in metric names, but PromQL doesn't use
     backslash escaping - dots are literal characters.
     """
-    # Remove backslash escaping of dots (common LLM mistake)
-    sanitized = query.replace(r'\.', '.')
-    if sanitized != query:
-        logger.debug(f"Sanitized PromQL query: removed escape sequences")
+    original = query
+    # Remove any backslashes before dots (common LLM mistake)
+    # This handles \. , \\. , \\\. etc.
+    sanitized = re.sub(r'\\+\.', '.', query)
+
+    if sanitized != original:
+        logger.warning(f"Sanitized PromQL: removed backslash escapes from query")
+        logger.debug(f"Original: {original[:100]}")
+        logger.debug(f"Sanitized: {sanitized[:100]}")
     return sanitized
 
 
