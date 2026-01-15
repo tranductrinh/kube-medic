@@ -31,10 +31,11 @@ def get_prometheus_client() -> PrometheusConnect:
     global _prom_client
 
     if _prom_client is not None:
+        logger.debug("Reusing existing Prometheus client")
         return _prom_client
 
     settings = get_settings()
-    logger.info(f"Connecting to Prometheus at {settings.prometheus_url}")
+    logger.info(f"Initializing Prometheus client for {settings.prometheus_url}")
 
     # Build headers with basic auth if credentials are provided
     headers: dict[str, str] = {}
@@ -42,7 +43,7 @@ def get_prometheus_client() -> PrometheusConnect:
         credentials = f"{settings.prometheus_username}:{settings.prometheus_password}"
         encoded = base64.b64encode(credentials.encode()).decode()
         headers["Authorization"] = f"Basic {encoded}"
-        logger.info("Using basic authentication for Prometheus")
+        logger.debug("Using basic authentication for Prometheus")
 
     _prom_client = PrometheusConnect(
         url=settings.prometheus_url,
@@ -51,6 +52,20 @@ def get_prometheus_client() -> PrometheusConnect:
     )
 
     return _prom_client
+
+
+def _sanitize_promql(query: str) -> str:
+    """
+    Sanitize a PromQL query by removing invalid escape sequences.
+
+    LLMs sometimes escape dots (\\.) in metric names, but PromQL doesn't use
+    backslash escaping - dots are literal characters.
+    """
+    # Remove backslash escaping of dots (common LLM mistake)
+    sanitized = query.replace(r'\.', '.')
+    if sanitized != query:
+        logger.debug(f"Sanitized PromQL query: removed escape sequences")
+    return sanitized
 
 
 def query_prometheus(promql: str) -> dict:
@@ -63,7 +78,9 @@ def query_prometheus(promql: str) -> dict:
     Returns:
         Dict containing the Prometheus API response
     """
-    logger.debug(f"Querying Prometheus: {promql[:60]}...")
+    # Sanitize query to fix common LLM mistakes
+    promql = _sanitize_promql(promql)
+    logger.debug(f"Querying Prometheus: {promql[:100]}...")
 
     try:
         prom = get_prometheus_client()
@@ -165,7 +182,9 @@ def prometheus_query_range(
     - Query CPU over last hour: query="rate(container_cpu_usage_seconds_total[5m])", start="1h"
     - Query memory over last day: query="container_memory_usage_bytes", start="1d", step="5m"
     """
-    logger.debug(f"Range query: {query[:60]}... from {start} to {end}, step {step}")
+    # Sanitize query to fix common LLM mistakes
+    query = _sanitize_promql(query)
+    logger.debug(f"Range query: {query[:100]}... from {start} to {end}, step {step}")
 
     try:
         prom = get_prometheus_client()

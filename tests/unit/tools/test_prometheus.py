@@ -7,6 +7,7 @@ Tests:
 - Prometheus range queries
 - Error handling
 - Input schema validation
+- PromQL sanitization
 
 Uses mocks to avoid requiring a real Prometheus server.
 """
@@ -14,6 +15,44 @@ Uses mocks to avoid requiring a real Prometheus server.
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+class TestSanitizePromql:
+    """Tests for _sanitize_promql function."""
+
+    def test_removes_escaped_dots(self) -> None:
+        """Test that escaped dots are unescaped."""
+        from kube_medic.tools.prometheus import _sanitize_promql
+
+        query = r'up{job="kubernetes\.pods"}'
+        result = _sanitize_promql(query)
+        assert result == 'up{job="kubernetes.pods"}'
+
+    def test_removes_multiple_escaped_dots(self) -> None:
+        """Test that multiple escaped dots are unescaped."""
+        from kube_medic.tools.prometheus import _sanitize_promql
+
+        query = r'rate(container\.cpu\.usage\.seconds_total[5m])'
+        result = _sanitize_promql(query)
+        assert result == 'rate(container.cpu.usage.seconds_total[5m])'
+
+    def test_preserves_normal_query(self) -> None:
+        """Test that queries without escapes are unchanged."""
+        from kube_medic.tools.prometheus import _sanitize_promql
+
+        query = 'up{job="kubernetes-pods"}'
+        result = _sanitize_promql(query)
+        assert result == query
+
+    def test_preserves_valid_escapes_in_strings(self) -> None:
+        """Test that other escape sequences in label values are preserved."""
+        from kube_medic.tools.prometheus import _sanitize_promql
+
+        # PromQL uses double quotes and can have escaped quotes
+        query = r'up{job="test\"value"}'
+        result = _sanitize_promql(query)
+        # Should still have escaped quote but dots would be unescaped
+        assert result == r'up{job="test\"value"}'
 
 
 class TestGetPrometheusClient:
