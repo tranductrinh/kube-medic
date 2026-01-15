@@ -403,6 +403,14 @@ class TestGetPodDetails:
 class TestGetPodLogs:
     """Tests for get_pod_logs tool."""
 
+    def _mock_single_container_pod(self, mock_client):
+        """Helper to mock a single-container pod."""
+        mock_container = MagicMock()
+        mock_container.name = "main"
+        mock_pod = MagicMock()
+        mock_pod.spec.containers = [mock_container]
+        mock_client.read_namespaced_pod.return_value = mock_pod
+
     @patch("kube_medic.tools.kubernetes.get_k8s_client")
     @patch("kube_medic.tools.kubernetes.get_settings")
     def test_returns_logs(self, mock_settings, mock_get_client) -> None:
@@ -413,6 +421,7 @@ class TestGetPodLogs:
         )
 
         mock_client = MagicMock()
+        self._mock_single_container_pod(mock_client)
         mock_client.read_namespaced_pod_log.return_value = "Log line 1\nLog line 2"
         mock_get_client.return_value = mock_client
 
@@ -436,6 +445,7 @@ class TestGetPodLogs:
         )
 
         mock_client = MagicMock()
+        self._mock_single_container_pod(mock_client)
         mock_client.read_namespaced_pod_log.return_value = ""
         mock_get_client.return_value = mock_client
 
@@ -446,7 +456,7 @@ class TestGetPodLogs:
             "namespace": "default"
         })
 
-        assert "No logs found" in result
+        assert "no logs" in result
 
     @patch("kube_medic.tools.kubernetes.get_k8s_client")
     @patch("kube_medic.tools.kubernetes.get_settings")
@@ -483,6 +493,7 @@ class TestGetPodLogs:
         )
 
         mock_client = MagicMock()
+        self._mock_single_container_pod(mock_client)
         mock_client.read_namespaced_pod_log.return_value = "Logs"
         mock_get_client.return_value = mock_client
 
@@ -507,6 +518,7 @@ class TestGetPodLogs:
         )
 
         mock_client = MagicMock()
+        self._mock_single_container_pod(mock_client)
         mock_client.read_namespaced_pod_log.return_value = "X" * 200
         mock_get_client.return_value = mock_client
 
@@ -521,25 +533,30 @@ class TestGetPodLogs:
 
     @patch("kube_medic.tools.kubernetes.get_k8s_client")
     @patch("kube_medic.tools.kubernetes.get_settings")
-    def test_handles_not_found(self, mock_settings, mock_get_client) -> None:
-        """Test get_pod_logs handles 404."""
+    def test_handles_log_retrieval_error(self, mock_settings, mock_get_client) -> None:
+        """Test get_pod_logs handles log retrieval errors gracefully."""
         mock_settings.return_value = MagicMock(
             k8s_logs_tail_lines=100,
             k8s_logs_max_chars=10000
         )
 
         mock_client = MagicMock()
-        mock_client.read_namespaced_pod_log.side_effect = ApiException(status=404)
+        # Pod exists with single container
+        self._mock_single_container_pod(mock_client)
+        # But log request fails with 404 (e.g., container not running yet)
+        mock_client.read_namespaced_pod_log.side_effect = ApiException(status=404, reason="Not Found")
         mock_get_client.return_value = mock_client
 
         from kube_medic.tools.kubernetes import get_pod_logs
 
         result = get_pod_logs.invoke({
-            "pod_name": "nonexistent",
+            "pod_name": "test-pod",
             "namespace": "default"
         })
 
-        assert "not found" in result
+        # Error should be reported per-container
+        assert "Error" in result
+        assert "Not Found" in result
 
     @patch("kube_medic.tools.kubernetes.get_k8s_client")
     @patch("kube_medic.tools.kubernetes.get_settings")
@@ -551,6 +568,7 @@ class TestGetPodLogs:
         )
 
         mock_client = MagicMock()
+        self._mock_single_container_pod(mock_client)
         mock_client.read_namespaced_pod_log.side_effect = ApiException(
             status=500, reason="Internal error"
         )
@@ -563,7 +581,133 @@ class TestGetPodLogs:
             "namespace": "default"
         })
 
-        assert "Error getting logs" in result
+        assert "Error" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.get_settings")
+    def test_multi_container_pod_fetches_all_logs(self, mock_settings, mock_get_client) -> None:
+        """Test get_pod_logs fetches logs from all containers when not specified."""
+        mock_settings.return_value = MagicMock(
+            k8s_logs_tail_lines=100,
+            k8s_logs_max_chars=10000
+        )
+
+        # Mock pod with 2 containers
+        mock_container1 = MagicMock()
+        mock_container1.name = "app"
+        mock_container2 = MagicMock()
+        mock_container2.name = "sidecar"
+
+        mock_pod = MagicMock()
+        mock_pod.spec.containers = [mock_container1, mock_container2]
+
+        mock_client = MagicMock()
+        mock_client.read_namespaced_pod.return_value = mock_pod
+
+        # Return different logs for each container
+        def mock_logs(**kwargs):
+            if kwargs.get("container") == "app":
+                return "App logs here"
+            elif kwargs.get("container") == "sidecar":
+                return "Sidecar logs here"
+            return ""
+
+        mock_client.read_namespaced_pod_log.side_effect = mock_logs
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import get_pod_logs
+
+        result = get_pod_logs.invoke({
+            "pod_name": "multi-pod",
+            "namespace": "default"
+        })
+
+        # Should contain logs from both containers
+        assert "Container: app" in result
+        assert "App logs here" in result
+        assert "Container: sidecar" in result
+        assert "Sidecar logs here" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.get_settings")
+    def test_multi_container_pod_divides_max_chars(self, mock_settings, mock_get_client) -> None:
+        """Test get_pod_logs divides max_chars among containers."""
+        mock_settings.return_value = MagicMock(
+            k8s_logs_tail_lines=100,
+            k8s_logs_max_chars=200  # Small limit for testing
+        )
+
+        # Mock pod with 2 containers
+        mock_container1 = MagicMock()
+        mock_container1.name = "app"
+        mock_container2 = MagicMock()
+        mock_container2.name = "sidecar"
+
+        mock_pod = MagicMock()
+        mock_pod.spec.containers = [mock_container1, mock_container2]
+
+        mock_client = MagicMock()
+        mock_client.read_namespaced_pod.return_value = mock_pod
+
+        # Return long logs for each container
+        mock_client.read_namespaced_pod_log.return_value = "X" * 500
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import get_pod_logs
+
+        result = get_pod_logs.invoke({
+            "pod_name": "multi-pod",
+            "namespace": "default"
+        })
+
+        # Should be truncated - each container gets max 100 chars
+        assert "truncated" in result
+
+    @patch("kube_medic.tools.kubernetes.get_k8s_client")
+    @patch("kube_medic.tools.kubernetes.get_settings")
+    def test_multi_container_handles_individual_errors(self, mock_settings, mock_get_client) -> None:
+        """Test get_pod_logs handles errors from individual containers gracefully."""
+        mock_settings.return_value = MagicMock(
+            k8s_logs_tail_lines=100,
+            k8s_logs_max_chars=10000
+        )
+
+        # Mock pod with 2 containers
+        mock_container1 = MagicMock()
+        mock_container1.name = "app"
+        mock_container2 = MagicMock()
+        mock_container2.name = "failing"
+
+        mock_pod = MagicMock()
+        mock_pod.spec.containers = [mock_container1, mock_container2]
+
+        mock_client = MagicMock()
+        mock_client.read_namespaced_pod.return_value = mock_pod
+
+        # First container succeeds, second fails
+        def mock_logs(**kwargs):
+            if kwargs.get("container") == "app":
+                return "App logs here"
+            elif kwargs.get("container") == "failing":
+                raise ApiException(status=500, reason="Container error")
+            return ""
+
+        mock_client.read_namespaced_pod_log.side_effect = mock_logs
+        mock_get_client.return_value = mock_client
+
+        from kube_medic.tools.kubernetes import get_pod_logs
+
+        result = get_pod_logs.invoke({
+            "pod_name": "multi-pod",
+            "namespace": "default"
+        })
+
+        # Should still return logs from successful container
+        assert "Container: app" in result
+        assert "App logs here" in result
+        # Should show error for failing container
+        assert "Container: failing" in result
+        assert "Error" in result
 
 
 class TestGetEvents:

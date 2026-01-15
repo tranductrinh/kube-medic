@@ -195,15 +195,15 @@ def list_namespaces() -> str:
     Use this to understand the structure of the cluster.
     """
     try:
-        logger.info("Listing namespaces...")
+        logger.debug("Listing namespaces")
         v1 = get_k8s_client()
         namespaces = v1.list_namespace()
 
         if not namespaces.items:
-            logger.warning("No namespaces found in cluster")
+            logger.debug("No namespaces found in cluster")
             return "No namespaces found."
 
-        logger.info(f"Found {len(namespaces.items)} namespaces")
+        logger.debug(f"Found {len(namespaces.items)} namespaces")
         lines = [f"Found {len(namespaces.items)} namespaces:\n"]
         for ns in namespaces.items:
             status = ns.status.phase
@@ -225,7 +225,7 @@ def list_pods(namespace: str = "", label_selector: str = "") -> str:
     Returns a summary of pods including name, namespace, status, and restarts.
     """
     try:
-        logger.info(f"Listing pods (namespace={namespace or 'all'}, selector={label_selector or 'none'})")
+        logger.debug(f"Listing pods (namespace={namespace or 'all'}, selector={label_selector or 'none'})")
         v1 = get_k8s_client()
 
         if namespace:
@@ -239,10 +239,10 @@ def list_pods(namespace: str = "", label_selector: str = "") -> str:
             )
 
         if not pods.items:
-            logger.warning("No pods found")
+            logger.debug("No pods found")
             return "No pods found."
 
-        logger.info(f"Found {len(pods.items)} pods")
+        logger.debug(f"Found {len(pods.items)} pods")
         lines = [f"Found {len(pods.items)} pods:\n"]
 
         for pod in pods.items:
@@ -265,6 +265,7 @@ def list_pods(namespace: str = "", label_selector: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing pods: {e}", exc_info=True)
         return f"Error listing pods: {e}"
 
 
@@ -277,6 +278,7 @@ def get_pod_details(pod_name: str, namespace: str = "default") -> str:
     Returns pod status, container details, resource limits, and conditions.
     """
     try:
+        logger.debug(f"Getting details for pod {namespace}/{pod_name}")
         v1 = get_k8s_client()
         pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
 
@@ -319,10 +321,25 @@ def get_pod_details(pod_name: str, namespace: str = "default") -> str:
 
     except ApiException as e:
         if e.status == 404:
+            logger.warning(f"Pod '{pod_name}' not found in namespace '{namespace}'")
             return f"Pod '{pod_name}' not found in namespace '{namespace}'"
+        logger.error(f"API error getting pod details: {e}", exc_info=True)
         return f"Error getting pod details: {e}"
     except Exception as e:
+        logger.error(f"Error getting pod details: {e}", exc_info=True)
         return f"Error: {e}"
+
+
+def _get_container_names(v1: client.CoreV1Api, pod_name: str, namespace: str) -> list[str]:
+    """Get list of container names from a pod."""
+    try:
+        pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
+        container_names = [c.name for c in pod.spec.containers]
+        logger.debug(f"Pod {namespace}/{pod_name} has containers: {container_names}")
+        return container_names
+    except Exception as e:
+        logger.debug(f"Could not get container names for {namespace}/{pod_name}: {e}")
+        return []
 
 
 @tool(args_schema=GetPodLogsInput)
@@ -337,42 +354,74 @@ def get_pod_logs(
     Use this to investigate application errors, crashes, or behavior.
 
     Returns the last N lines of logs from the specified pod/container.
+    For multi-container pods, returns logs from all containers if not specified.
     """
     try:
-        logger.info(f"Getting logs for pod {namespace}/{pod_name}")
+        logger.debug(f"Getting logs for pod {namespace}/{pod_name}")
         settings = get_settings()
 
         # Use config default if not specified
         if tail_lines is None:
             tail_lines = settings.k8s_logs_tail_lines
 
-        logger.debug(f"Tail lines: {tail_lines}, container: {container or 'default'}")
+        logger.debug(f"Config: tail_lines={tail_lines}, container={container or 'auto-detect'}")
 
         v1 = get_k8s_client()
 
-        kwargs = {
-            "name": pod_name,
-            "namespace": namespace,
-            "tail_lines": tail_lines,
-        }
-        if container:
-            kwargs["container"] = container
+        # If container not specified, check if pod has multiple containers
+        containers_to_fetch = [container] if container else []
+        if not container:
+            container_names = _get_container_names(v1, pod_name, namespace)
+            if len(container_names) > 1:
+                logger.debug(f"Multi-container pod detected, fetching logs from all {len(container_names)} containers")
+                containers_to_fetch = container_names
+            elif len(container_names) == 1:
+                containers_to_fetch = container_names
+            else:
+                # Fallback: try without container name (single-container pod)
+                containers_to_fetch = [""]
 
-        logs = v1.read_namespaced_pod_log(**kwargs)
+        all_logs = []
+        max_chars = settings.k8s_logs_max_chars
 
-        if not logs:
-            logger.warning(f"No logs found for {namespace}/{pod_name}")
+        # For multi-container pods, divide the max_chars budget
+        per_container_max = max_chars // len(containers_to_fetch) if containers_to_fetch else max_chars
+
+        for cont in containers_to_fetch:
+            container_label = cont if cont else "main"
+            kwargs = {
+                "name": pod_name,
+                "namespace": namespace,
+                "tail_lines": tail_lines,
+            }
+            if cont:
+                kwargs["container"] = cont
+
+            try:
+                logs = v1.read_namespaced_pod_log(**kwargs)
+
+                if logs:
+                    # Truncate per-container logs
+                    if len(logs) > per_container_max:
+                        logger.debug(f"Truncating logs for container '{container_label}' from {len(logs)} to {per_container_max} chars")
+                        logs = f"[...truncated...]\n{logs[-per_container_max:]}"
+
+                    all_logs.append(f"=== Container: {container_label} ===\n{logs}")
+                else:
+                    all_logs.append(f"=== Container: {container_label} ===\n(no logs)")
+
+            except ApiException as e:
+                logger.warning(f"Failed to get logs for container '{container_label}': {e.reason}")
+                all_logs.append(f"=== Container: {container_label} ===\nError: {e.reason}")
+
+        if not all_logs:
+            logger.debug(f"No logs found for {namespace}/{pod_name}")
             return f"No logs found for pod {pod_name}"
 
-        logger.info(f"Retrieved {len(logs)} characters of logs")
+        combined_logs = "\n\n".join(all_logs)
+        logger.debug(f"Retrieved {len(combined_logs)} chars of logs from {len(containers_to_fetch)} container(s)")
 
-        # Truncate if too long (LLM context limits)
-        max_chars = settings.k8s_logs_max_chars
-        if len(logs) > max_chars:
-            logger.debug(f"Truncating logs from {len(logs)} to {max_chars} chars")
-            logs = f"[...truncated...]\n{logs[-max_chars:]}"
-
-        return f"Logs from {namespace}/{pod_name} (last {tail_lines} lines):\n\n{logs}"
+        return f"Logs from {namespace}/{pod_name} (last {tail_lines} lines):\n\n{combined_logs}"
 
     except ApiException as e:
         if e.status == 404:
@@ -394,6 +443,7 @@ def get_events(namespace: str = "", resource_name: str = "") -> str:
     Events show things like pod scheduling, image pulls, container crashes, etc.
     """
     try:
+        logger.debug(f"Getting events (namespace={namespace or 'all'}, resource={resource_name or 'all'})")
         v1 = get_k8s_client()
 
         if namespace:
@@ -418,8 +468,10 @@ def get_events(namespace: str = "", resource_name: str = "") -> str:
         events.items = events.items[:20]
 
         if not events.items:
+            logger.debug("No events found")
             return "No events found."
 
+        logger.debug(f"Found {len(events.items)} events")
         lines = [f"Found {len(events.items)} events (most recent first):\n"]
 
         for event in events.items:
@@ -434,6 +486,7 @@ def get_events(namespace: str = "", resource_name: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error getting events: {e}", exc_info=True)
         return f"Error getting events: {e}"
 
 
@@ -444,6 +497,7 @@ def list_deployments(namespace: str = "") -> str:
     Use this to see deployment status, replica counts, and availability.
     """
     try:
+        logger.debug(f"Listing deployments (namespace={namespace or 'all'})")
         apps = get_apps_client()
 
         if namespace:
@@ -452,8 +506,10 @@ def list_deployments(namespace: str = "") -> str:
             deployments = apps.list_deployment_for_all_namespaces()
 
         if not deployments.items:
+            logger.debug("No deployments found")
             return "No deployments found."
 
+        logger.debug(f"Found {len(deployments.items)} deployments")
         lines = [f"Found {len(deployments.items)} deployments:\n"]
 
         for dep in deployments.items:
@@ -470,6 +526,7 @@ def list_deployments(namespace: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing deployments: {e}", exc_info=True)
         return f"Error listing deployments: {e}"
 
 
@@ -480,6 +537,7 @@ def list_services(namespace: str = "") -> str:
     Use this to see service configuration, types, and cluster IPs.
     """
     try:
+        logger.debug(f"Listing services (namespace={namespace or 'all'})")
         v1 = get_k8s_client()
 
         if namespace:
@@ -488,8 +546,10 @@ def list_services(namespace: str = "") -> str:
             services = v1.list_service_for_all_namespaces()
 
         if not services.items:
+            logger.debug("No services found")
             return "No services found."
 
+        logger.debug(f"Found {len(services.items)} services")
         lines = [f"Found {len(services.items)} services:\n"]
 
         for svc in services.items:
@@ -506,6 +566,7 @@ def list_services(namespace: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing services: {e}", exc_info=True)
         return f"Error listing services: {e}"
 
 
@@ -516,6 +577,7 @@ def list_ingresses(namespace: str = "") -> str:
     Use this to see HTTP/HTTPS routing rules, hosts, and backend services.
     """
     try:
+        logger.debug(f"Listing ingresses (namespace={namespace or 'all'})")
         networking = get_networking_client()
 
         if namespace:
@@ -524,8 +586,10 @@ def list_ingresses(namespace: str = "") -> str:
             ingresses = networking.list_ingress_for_all_namespaces()
 
         if not ingresses.items:
+            logger.debug("No ingresses found")
             return "No ingresses found."
 
+        logger.debug(f"Found {len(ingresses.items)} ingresses")
         lines = [f"Found {len(ingresses.items)} ingresses:\n"]
 
         for ing in ingresses.items:
@@ -563,6 +627,7 @@ def list_ingresses(namespace: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing ingresses: {e}", exc_info=True)
         return f"Error listing ingresses: {e}"
 
 
@@ -573,12 +638,15 @@ def list_nodes() -> str:
     Use this to see node status and check for node issues.
     """
     try:
+        logger.debug("Listing cluster nodes")
         v1 = get_k8s_client()
         nodes = v1.list_node()
 
         if not nodes.items:
+            logger.debug("No nodes found")
             return "No nodes found."
 
+        logger.debug(f"Found {len(nodes.items)} nodes")
         lines = [f"Found {len(nodes.items)} nodes:\n"]
 
         for node in nodes.items:
@@ -603,6 +671,7 @@ def list_nodes() -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing nodes: {e}", exc_info=True)
         return f"Error listing nodes: {e}"
 
 
@@ -613,6 +682,7 @@ def get_node_details(node_name: str) -> str:
     Use this to investigate node conditions, capacity, and allocatable resources.
     """
     try:
+        logger.debug(f"Getting details for node {node_name}")
         v1 = get_k8s_client()
         node = v1.read_node(name=node_name)
 
@@ -646,9 +716,12 @@ def get_node_details(node_name: str) -> str:
 
     except ApiException as e:
         if e.status == 404:
+            logger.warning(f"Node '{node_name}' not found")
             return f"Node '{node_name}' not found"
+        logger.error(f"API error getting node details: {e}", exc_info=True)
         return f"Error getting node details: {e}"
     except Exception as e:
+        logger.error(f"Error getting node details: {e}", exc_info=True)
         return f"Error: {e}"
 
 
@@ -659,6 +732,7 @@ def list_configmaps(namespace: str = "") -> str:
     Use this to see what configuration is available to pods.
     """
     try:
+        logger.debug(f"Listing ConfigMaps (namespace={namespace or 'all'})")
         v1 = get_k8s_client()
 
         if namespace:
@@ -667,8 +741,10 @@ def list_configmaps(namespace: str = "") -> str:
             configmaps = v1.list_config_map_for_all_namespaces()
 
         if not configmaps.items:
+            logger.debug("No ConfigMaps found")
             return "No ConfigMaps found."
 
+        logger.debug(f"Found {len(configmaps.items)} ConfigMaps")
         lines = [f"Found {len(configmaps.items)} ConfigMaps:\n"]
 
         for cm in configmaps.items:
@@ -686,6 +762,7 @@ def list_configmaps(namespace: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing ConfigMaps: {e}", exc_info=True)
         return f"Error listing ConfigMaps: {e}"
 
 
@@ -696,6 +773,7 @@ def list_secrets(namespace: str = "") -> str:
     Use this to check if required secrets exist.
     """
     try:
+        logger.debug(f"Listing Secrets (namespace={namespace or 'all'})")
         v1 = get_k8s_client()
 
         if namespace:
@@ -704,8 +782,10 @@ def list_secrets(namespace: str = "") -> str:
             secrets = v1.list_secret_for_all_namespaces()
 
         if not secrets.items:
+            logger.debug("No Secrets found")
             return "No Secrets found."
 
+        logger.debug(f"Found {len(secrets.items)} Secrets")
         lines = [f"Found {len(secrets.items)} Secrets:\n"]
 
         for secret in secrets.items:
@@ -720,6 +800,7 @@ def list_secrets(namespace: str = "") -> str:
         return "\n".join(lines)
 
     except Exception as e:
+        logger.error(f"Error listing Secrets: {e}", exc_info=True)
         return f"Error listing Secrets: {e}"
 
 
