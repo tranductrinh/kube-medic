@@ -2,7 +2,7 @@
 Helper functions for KubeMedic.
 
 This module provides:
-- get_llm: LLM singleton factory (Azure OpenAI)
+- get_llm: LLM singleton factory (OpenAI-compatible endpoint)
 - ask_agent: Ask agent with detailed DEBUG logging
 - format_error: Format exceptions for display
 - truncate_text: Truncate text to max length
@@ -12,7 +12,7 @@ This module provides:
 import re
 from datetime import datetime, timedelta
 
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import ChatOpenAI
 
 from kube_medic.config import get_settings
 from kube_medic.logging_config import get_logger
@@ -23,15 +23,16 @@ logger = get_logger(__name__)
 # LLM FACTORY (Singleton Pattern)
 # =============================================================================
 
-_llm_instance: AzureChatOpenAI | None = None
+_llm_instance: ChatOpenAI | None = None
 
 
-def get_llm() -> AzureChatOpenAI:
+def get_llm() -> ChatOpenAI:
     """
     Get or create the LLM instance.
 
     Uses singleton pattern - only creates LLM once.
     All agents share the same LLM instance.
+    Supports OpenAI-compatible endpoints (Azure OpenAI with /openai/v1/ format).
     """
     global _llm_instance
 
@@ -42,16 +43,15 @@ def get_llm() -> AzureChatOpenAI:
     logger.info("Initializing LLM instance...")
     settings = get_settings()
 
-    _llm_instance = AzureChatOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_api_key,
-        azure_deployment=settings.azure_openai_deployment_name,
-        api_version=settings.azure_openai_api_version,
+    _llm_instance = ChatOpenAI(
+        base_url=settings.openai_base_url,
+        api_key=settings.openai_api_key,
+        model=settings.openai_model,
         temperature=settings.llm_temperature,
         max_tokens=settings.llm_max_tokens,
     )
 
-    logger.info(f"LLM initialized (temp={settings.llm_temperature}, max_tokens={settings.llm_max_tokens})")
+    logger.info(f"LLM initialized (model={settings.openai_model}, temp={settings.llm_temperature}, max_tokens={settings.llm_max_tokens})")
     return _llm_instance
 
 

@@ -66,15 +66,15 @@ cp .env.example .env
 
 Required environment variables:
 
-| Variable                       | Description                                 |
-|--------------------------------|---------------------------------------------|
-| `AZURE_OPENAI_ENDPOINT`        | Azure OpenAI endpoint URL                   |
-| `AZURE_OPENAI_API_KEY`         | Azure OpenAI API key                        |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Model deployment name (e.g., gpt-4o)        |
-| `PROMETHEUS_URL`               | Prometheus server URL                       |
-| `SMTP_HOST`                    | SMTP server hostname (e.g., smtp.gmail.com) |
-| `EMAIL_FROM`                   | Sender email address                        |
-| `EMAIL_TO`                     | Recipient for all investigation reports     |
+| Variable          | Description                                                          |
+|-------------------|----------------------------------------------------------------------|
+| `OPENAI_BASE_URL` | OpenAI-compatible API base URL (e.g., `https://your-resource.openai.azure.com/openai/v1/`) |
+| `OPENAI_API_KEY`  | OpenAI API key                                                       |
+| `OPENAI_MODEL`    | Model/deployment name (e.g., gpt-5.2, gpt-4o)                        |
+| `PROMETHEUS_URL`  | Prometheus server URL                                                |
+| `SMTP_HOST`       | SMTP server hostname (e.g., smtp.gmail.com)                          |
+| `EMAIL_FROM`      | Sender email address                                                 |
+| `EMAIL_TO`        | Recipient for all investigation reports                              |
 
 The server will fail to start if required variables are missing. See `.env.example` for all options.
 
@@ -188,9 +188,9 @@ metadata:
   namespace: monitoring
 type: Opaque
 stringData:
-  AZURE_OPENAI_ENDPOINT: "https://your-resource.openai.azure.com/"
-  AZURE_OPENAI_API_KEY: "your-api-key"
-  AZURE_OPENAI_DEPLOYMENT_NAME: "gpt-4o"
+  OPENAI_BASE_URL: "https://your-resource.openai.azure.com/openai/v1/"
+  OPENAI_API_KEY: "your-api-key"
+  OPENAI_MODEL: "gpt-5.2"
   PROMETHEUS_URL: "http://prometheus-server.monitoring:80"
   SMTP_HOST: "smtp.gmail.com"
   EMAIL_FROM: "kube-medic@example.com"

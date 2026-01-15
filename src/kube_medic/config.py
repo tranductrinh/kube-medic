@@ -23,17 +23,17 @@ class Settings(BaseSettings):
     # =========================================================================
     # REQUIRED SETTINGS (no defaults = must be set)
     # =========================================================================
-    azure_openai_endpoint: str = Field(
+    openai_base_url: str = Field(
         ...,
-        description="Azure OpenAI endpoint URL",
+        description="OpenAI-compatible API base URL (e.g., https://your-resource.openai.azure.com/openai/v1/)",
     )
-    azure_openai_api_key: str = Field(
+    openai_api_key: str = Field(
         ...,
-        description="Azure OpenAI API key",
+        description="OpenAI API key",
     )
-    azure_openai_deployment_name: str = Field(
+    openai_model: str = Field(
         ...,
-        description="Azure OpenAI deployment name",
+        description="Model/deployment name (e.g., gpt-5.2, gpt-4o)",
     )
     prometheus_url: str = Field(
         ...,
@@ -43,10 +43,6 @@ class Settings(BaseSettings):
     # =========================================================================
     # LLM CONFIGURATION
     # =========================================================================
-    azure_openai_api_version: str = Field(
-        default="2024-08-01-preview",
-        description="Azure OpenAI API version",
-    )
     llm_temperature: float = Field(
         default=0.0,
         description="LLM temperature for response generation (0=deterministic, 1=creative)",
@@ -165,7 +161,7 @@ class Settings(BaseSettings):
         description="Recipient email address for all notifications",
     )
 
-    @field_validator("prometheus_url", "azure_openai_endpoint")
+    @field_validator("prometheus_url", "openai_base_url")
     @classmethod
     def remove_trailing_slash(cls, v: str) -> str:
         """Remove trailing slashes from URLs."""
@@ -188,7 +184,8 @@ if __name__ == "__main__":
     try:
         settings = get_settings()
         logger.info("Settings loaded!")
-        logger.info(f"Endpoint: {settings.azure_openai_endpoint}")
+        logger.info(f"Base URL: {settings.openai_base_url}")
+        logger.info(f"Model: {settings.openai_model}")
         logger.info(f"Prometheus: {settings.prometheus_url}")
     except Exception as e:
         logger.error(f"Error: {e}")

@@ -241,9 +241,9 @@ class TestParseRelativeTime:
 class TestGetLlm:
     """Tests for get_llm singleton function."""
 
-    @patch("kube_medic.utils.helpers.AzureChatOpenAI")
+    @patch("kube_medic.utils.helpers.ChatOpenAI")
     @patch("kube_medic.utils.helpers.get_settings")
-    def test_get_llm_creates_instance(self, mock_settings, mock_azure) -> None:
+    def test_get_llm_creates_instance(self, mock_settings, mock_openai) -> None:
         """Test that get_llm creates an LLM instance."""
         from kube_medic.utils.helpers import get_llm
         import kube_medic.utils.helpers as helpers_module
@@ -253,10 +253,9 @@ class TestGetLlm:
 
         # Setup mock settings
         mock_settings.return_value = MagicMock(
-            azure_openai_endpoint="https://test.openai.azure.com",
-            azure_openai_api_key="test-key",
-            azure_openai_deployment_name="gpt-4",
-            azure_openai_api_version="2024-08-01-preview",
+            openai_base_url="https://test.openai.azure.com/openai/v1/",
+            openai_api_key="test-key",
+            openai_model="gpt-5.2",
             llm_temperature=0.0,
             llm_max_tokens=2048,
         )
@@ -264,21 +263,20 @@ class TestGetLlm:
         # Call get_llm
         result = get_llm()
 
-        # Verify AzureChatOpenAI was called with correct params
-        mock_azure.assert_called_once_with(
-            azure_endpoint="https://test.openai.azure.com",
+        # Verify ChatOpenAI was called with correct params
+        mock_openai.assert_called_once_with(
+            base_url="https://test.openai.azure.com/openai/v1/",
             api_key="test-key",
-            azure_deployment="gpt-4",
-            api_version="2024-08-01-preview",
+            model="gpt-5.2",
             temperature=0.0,
             max_tokens=2048,
         )
 
         assert result is not None
 
-    @patch("kube_medic.utils.helpers.AzureChatOpenAI")
+    @patch("kube_medic.utils.helpers.ChatOpenAI")
     @patch("kube_medic.utils.helpers.get_settings")
-    def test_get_llm_returns_singleton(self, mock_settings, mock_azure) -> None:
+    def test_get_llm_returns_singleton(self, mock_settings, mock_openai) -> None:
         """Test that get_llm returns the same instance on subsequent calls."""
         from kube_medic.utils.helpers import get_llm
         import kube_medic.utils.helpers as helpers_module
@@ -287,10 +285,9 @@ class TestGetLlm:
         helpers_module._llm_instance = None
 
         mock_settings.return_value = MagicMock(
-            azure_openai_endpoint="https://test.openai.azure.com",
-            azure_openai_api_key="test-key",
-            azure_openai_deployment_name="gpt-4",
-            azure_openai_api_version="2024-08-01-preview",
+            openai_base_url="https://test.openai.azure.com/openai/v1/",
+            openai_api_key="test-key",
+            openai_model="gpt-5.2",
             llm_temperature=0.0,
             llm_max_tokens=2048,
         )
@@ -302,8 +299,8 @@ class TestGetLlm:
         # Should be same instance
         assert result1 is result2
 
-        # AzureChatOpenAI should only be called once
-        assert mock_azure.call_count == 1
+        # ChatOpenAI should only be called once
+        assert mock_openai.call_count == 1
 
 
 class TestAskAgent:

@@ -19,9 +19,9 @@ from pydantic import ValidationError
 
 # Base required environment variables for all tests
 REQUIRED_ENV = {
-    "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-    "AZURE_OPENAI_API_KEY": "test-key",
-    "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o",
+    "OPENAI_BASE_URL": "https://test.openai.azure.com/openai/v1/",
+    "OPENAI_API_KEY": "test-key",
+    "OPENAI_MODEL": "gpt-5.2",
     "PROMETHEUS_URL": "http://prometheus:9090",
     "SMTP_HOST": "smtp.test.com",
     "EMAIL_FROM": "test@example.com",
@@ -41,9 +41,9 @@ class TestSettingsLoading:
             get_settings.cache_clear()
             settings = get_settings()
 
-            assert settings.azure_openai_endpoint == "https://test.openai.azure.com"
-            assert settings.azure_openai_api_key == "test-key"
-            assert settings.azure_openai_deployment_name == "gpt-4o"
+            assert settings.openai_base_url == "https://test.openai.azure.com/openai/v1"
+            assert settings.openai_api_key == "test-key"
+            assert settings.openai_model == "gpt-5.2"
             assert settings.prometheus_url == "http://prometheus:9090"
 
     def test_ignores_extra_env_vars(self) -> None:
@@ -91,16 +91,16 @@ class TestSettingsCaching:
 class TestURLNormalization:
     """Tests for URL normalization (trailing slash removal)."""
 
-    def test_removes_trailing_slash_from_endpoint(self) -> None:
-        """Test that trailing slash is removed from Azure endpoint."""
+    def test_removes_trailing_slash_from_base_url(self) -> None:
+        """Test that trailing slash is removed from OpenAI base URL."""
         from kube_medic.config import get_settings
         get_settings.cache_clear()
 
-        with patch.dict(os.environ, {**REQUIRED_ENV, "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/"}, clear=True):
+        with patch.dict(os.environ, {**REQUIRED_ENV, "OPENAI_BASE_URL": "https://test.openai.azure.com/openai/v1/"}, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
-            assert settings.azure_openai_endpoint == "https://test.openai.azure.com"
+            assert settings.openai_base_url == "https://test.openai.azure.com/openai/v1"
 
     def test_removes_trailing_slash_from_prometheus(self) -> None:
         """Test that trailing slash is removed from Prometheus URL."""
@@ -120,69 +120,69 @@ class TestURLNormalization:
 
         with patch.dict(os.environ, {
             **REQUIRED_ENV,
-            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com///",
+            "OPENAI_BASE_URL": "https://test.openai.azure.com/openai/v1///",
             "PROMETHEUS_URL": "http://prometheus:9090//",
         }, clear=True):
             get_settings.cache_clear()
             settings = get_settings()
 
-            assert settings.azure_openai_endpoint == "https://test.openai.azure.com"
+            assert settings.openai_base_url == "https://test.openai.azure.com/openai/v1"
             assert settings.prometheus_url == "http://prometheus:9090"
 
 
 class TestRequiredFields:
     """Tests for required field validation."""
 
-    def test_missing_azure_endpoint_raises_error(self) -> None:
-        """Test that missing Azure endpoint raises error."""
+    def test_missing_openai_base_url_raises_error(self) -> None:
+        """Test that missing OpenAI base URL raises error."""
         from kube_medic.config import Settings
 
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
                 email_to="recipient@example.com",
             )
 
-        assert "azure_openai_endpoint" in str(exc_info.value)
+        assert "openai_base_url" in str(exc_info.value)
 
-    def test_missing_azure_api_key_raises_error(self) -> None:
-        """Test that missing Azure API key raises error."""
+    def test_missing_openai_api_key_raises_error(self) -> None:
+        """Test that missing OpenAI API key raises error."""
         from kube_medic.config import Settings
 
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
                 email_to="recipient@example.com",
             )
 
-        assert "azure_openai_api_key" in str(exc_info.value)
+        assert "openai_api_key" in str(exc_info.value)
 
-    def test_missing_deployment_name_raises_error(self) -> None:
-        """Test that missing deployment name raises error."""
+    def test_missing_openai_model_raises_error(self) -> None:
+        """Test that missing OpenAI model raises error."""
         from kube_medic.config import Settings
 
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
                 email_to="recipient@example.com",
             )
 
-        assert "azure_openai_deployment_name" in str(exc_info.value)
+        assert "openai_model" in str(exc_info.value)
 
     def test_missing_prometheus_url_raises_error(self) -> None:
         """Test that missing Prometheus URL raises error."""
@@ -191,9 +191,9 @@ class TestRequiredFields:
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
                 email_to="recipient@example.com",
@@ -208,9 +208,9 @@ class TestRequiredFields:
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 email_from="test@example.com",
                 email_to="recipient@example.com",
@@ -225,9 +225,9 @@ class TestRequiredFields:
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_to="recipient@example.com",
@@ -242,9 +242,9 @@ class TestRequiredFields:
         with pytest.raises(ValidationError) as exc_info:
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -265,7 +265,6 @@ class TestDefaultValues:
             get_settings.cache_clear()
             settings = get_settings()
 
-            assert settings.azure_openai_api_version == "2024-08-01-preview"
             assert settings.llm_temperature == 0.0
             assert settings.llm_max_tokens == 2048
 
@@ -344,9 +343,9 @@ class TestConfigValidation:
 
         settings = Settings(
             _env_file=None,
-            azure_openai_endpoint="https://test.openai.azure.com",
-            azure_openai_api_key="test-key",
-            azure_openai_deployment_name="gpt-4o",
+            openai_base_url="https://test.openai.azure.com/openai/v1/",
+            openai_api_key="test-key",
+            openai_model="gpt-5.2",
             prometheus_url="http://prometheus:9090",
             smtp_host="smtp.test.com",
             email_from="test@example.com",
@@ -362,9 +361,9 @@ class TestConfigValidation:
 
         settings = Settings(
             _env_file=None,
-            azure_openai_endpoint="https://test.openai.azure.com",
-            azure_openai_api_key="test-key",
-            azure_openai_deployment_name="gpt-4o",
+            openai_base_url="https://test.openai.azure.com/openai/v1/",
+            openai_api_key="test-key",
+            openai_model="gpt-5.2",
             prometheus_url="http://prometheus:9090",
             smtp_host="smtp.test.com",
             email_from="test@example.com",
@@ -391,9 +390,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -408,9 +407,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -425,9 +424,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -442,9 +441,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -459,9 +458,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -476,9 +475,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -493,9 +492,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -510,9 +509,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -527,9 +526,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -544,9 +543,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -561,9 +560,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -578,9 +577,9 @@ class TestConfigValidation:
         with pytest.raises(ValidationError):
             Settings(
                 _env_file=None,
-                azure_openai_endpoint="https://test.openai.azure.com",
-                azure_openai_api_key="test-key",
-                azure_openai_deployment_name="gpt-4o",
+                openai_base_url="https://test.openai.azure.com/openai/v1/",
+                openai_api_key="test-key",
+                openai_model="gpt-5.2",
                 prometheus_url="http://prometheus:9090",
                 smtp_host="smtp.test.com",
                 email_from="test@example.com",
@@ -639,20 +638,6 @@ class TestCustomValues:
 
             assert settings.k8s_logs_tail_lines == 100
             assert settings.k8s_logs_max_chars == 5000
-
-    def test_custom_api_version(self) -> None:
-        """Test that custom API version is applied."""
-        from kube_medic.config import get_settings
-        get_settings.cache_clear()
-
-        with patch.dict(os.environ, {
-            **REQUIRED_ENV,
-            "AZURE_OPENAI_API_VERSION": "2024-10-01",
-        }, clear=True):
-            get_settings.cache_clear()
-            settings = get_settings()
-
-            assert settings.azure_openai_api_version == "2024-10-01"
 
     def test_custom_agent_recursion_limit(self) -> None:
         """Test that custom agent recursion limit is applied."""

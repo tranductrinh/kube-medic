@@ -71,9 +71,9 @@ def sample_config_env(mock_env):
             # Config env is already set up
             settings = get_settings()
     """
-    mock_env.set("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-    mock_env.set("AZURE_OPENAI_API_KEY", "test-key")
-    mock_env.set("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+    mock_env.set("OPENAI_BASE_URL", "https://test.openai.azure.com/openai/v1/")
+    mock_env.set("OPENAI_API_KEY", "test-key")
+    mock_env.set("OPENAI_MODEL", "gpt-5.2")
     mock_env.set("PROMETHEUS_URL", "http://prometheus:9090")
     return mock_env
 

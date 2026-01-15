@@ -4,7 +4,7 @@ Integration tests requiring live services.
 Tests that validate real interactions with:
 - Kubernetes cluster
 - Prometheus server
-- Azure OpenAI API
+- OpenAI-compatible API
 
 Run with: pytest tests/ -v -m integration
 Skip with: pytest tests/ -v -m "not integration"
@@ -23,9 +23,9 @@ class TestIntegrationConfig:
     def skip_if_no_env(self) -> None:
         """Skip if .env is not configured with required vars."""
         required_vars = [
-            "AZURE_OPENAI_ENDPOINT",
-            "AZURE_OPENAI_API_KEY",
-            "AZURE_OPENAI_DEPLOYMENT_NAME",
+            "OPENAI_BASE_URL",
+            "OPENAI_API_KEY",
+            "OPENAI_MODEL",
             "PROMETHEUS_URL",
         ]
         missing = [v for v in required_vars if not os.environ.get(v)]
@@ -37,9 +37,9 @@ class TestIntegrationConfig:
         from kube_medic.config import get_settings
 
         settings = get_settings()
-        assert settings.azure_openai_endpoint is not None
-        assert settings.azure_openai_api_key is not None
-        assert settings.azure_openai_deployment_name is not None
+        assert settings.openai_base_url is not None
+        assert settings.openai_api_key is not None
+        assert settings.openai_model is not None
         assert settings.prometheus_url is not None
 
     def test_config_has_valid_values(self) -> None:
@@ -49,7 +49,7 @@ class TestIntegrationConfig:
         settings = get_settings()
 
         # Validate types
-        assert isinstance(settings.azure_openai_endpoint, str)
+        assert isinstance(settings.openai_base_url, str)
         assert isinstance(settings.prometheus_url, str)
         assert isinstance(settings.llm_temperature, float)
         assert isinstance(settings.llm_max_tokens, int)
@@ -168,12 +168,12 @@ class TestIntegrationPrometheus:
 
 @pytest.mark.integration
 class TestIntegrationAgentCreation:
-    """Integration tests for agent creation (requires Azure OpenAI + cluster)."""
+    """Integration tests for agent creation (requires OpenAI API + cluster)."""
 
     @pytest.fixture(autouse=True)
     def skip_if_incomplete_env(self) -> None:
         """Skip if environment is not fully configured."""
-        required = ["AZURE_OPENAI_ENDPOINT", "PROMETHEUS_URL"]
+        required = ["OPENAI_BASE_URL", "PROMETHEUS_URL"]
         if not all(os.environ.get(v) for v in required):
             pytest.skip("Incomplete environment configuration")
 
