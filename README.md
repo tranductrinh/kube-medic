@@ -146,7 +146,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: kube-medic
-  namespace: monitoring
+  namespace: monitoring-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -170,7 +170,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: kube-medic
-    namespace: monitoring
+    namespace: monitoring-system
 roleRef:
   kind: ClusterRole
   name: kube-medic
@@ -184,14 +184,14 @@ roleRef:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: kube-medic
-  namespace: monitoring
+  name: kube-medic-secret
+  namespace: monitoring-system
 type: Opaque
 stringData:
   OPENAI_BASE_URL: "https://your-resource.openai.azure.com/openai/v1/"
   OPENAI_API_KEY: "your-api-key"
   OPENAI_MODEL: "gpt-5.2"
-  PROMETHEUS_URL: "http://prometheus-server.monitoring:80"
+  PROMETHEUS_URL: "http://prometheus-server.monitoring-system:80"
   SMTP_HOST: "smtp.gmail.com"
   EMAIL_FROM: "kube-medic@example.com"
   EMAIL_TO: "ops-team@example.com"
@@ -205,7 +205,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kube-medic
-  namespace: monitoring
+  namespace: monitoring-system
 spec:
   replicas: 1
   selector:
@@ -224,7 +224,7 @@ spec:
             - containerPort: 8000
           envFrom:
             - secretRef:
-                name: kube-medic
+                name: kube-medic-secret
           livenessProbe:
             httpGet:
               path: /health
@@ -242,7 +242,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kube-medic
-  namespace: monitoring
+  namespace: monitoring-system
 spec:
   selector:
     app: kube-medic
@@ -267,7 +267,7 @@ KubeMedic can receive alerts directly from Prometheus Alertmanager. Add a receiv
 receivers:
   - name: 'kube-medic'
     webhook_configs:
-      - url: 'http://kube-medic.monitoring:8000/webhook'
+      - url: 'http://kube-medic.monitoring-system:8000/webhook'
         send_resolved: false  # Optional: don't notify on resolution
 
 route:
