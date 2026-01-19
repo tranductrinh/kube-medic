@@ -22,6 +22,10 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
+    # New dependencies for reliability improvements
+    "slowapi>=0.1.9",         # Rate limiting
+    "tenacity>=8.2.0",        # Retry logic with exponential backoff
+    "cachetools>=5.3.0",      # TTL-based caching
 ]
 
 [project.optional-dependencies]

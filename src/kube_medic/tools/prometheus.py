@@ -4,12 +4,18 @@ Prometheus Metrics Tools.
 This module provides tools for querying Prometheus:
 - prometheus_query: Execute PromQL queries
 - prometheus_query_range: Execute PromQL range queries for trend analysis
+
+Features:
+- Query result caching with configurable TTL
+- Query validation for safety (prevents expensive/dangerous queries)
 """
 
 import base64
 import re
 from datetime import datetime
+from threading import Lock
 
+from cachetools import TTLCache
 from langchain_core.tools import tool
 from prometheus_api_client import PrometheusConnect
 from pydantic import BaseModel, Field
@@ -19,6 +25,91 @@ from kube_medic.logging_config import get_logger
 from kube_medic.utils.helpers import parse_relative_time
 
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# QUERY CACHE
+# =============================================================================
+
+_query_cache: TTLCache | None = None
+_cache_lock = Lock()
+
+
+def _get_query_cache() -> TTLCache:
+    """Get or create the query cache with settings from config."""
+    global _query_cache
+    if _query_cache is None:
+        settings = get_settings()
+        _query_cache = TTLCache(
+            maxsize=settings.cache_prometheus_maxsize,
+            ttl=settings.cache_prometheus_ttl,
+        )
+        logger.info(
+            f"Prometheus query cache initialized "
+            f"(maxsize={settings.cache_prometheus_maxsize}, ttl={settings.cache_prometheus_ttl}s)"
+        )
+    return _query_cache
+
+
+# =============================================================================
+# QUERY VALIDATION
+# =============================================================================
+
+class PromQLValidationError(Exception):
+    """Raised when PromQL query fails validation."""
+    pass
+
+
+def _validate_promql(query: str) -> None:
+    """
+    Validate PromQL query for safety.
+
+    Checks for:
+    - Maximum query length
+    - Dangerous patterns that could impact Prometheus performance
+    - Excessive nesting depth
+
+    Raises:
+        PromQLValidationError: If query is potentially dangerous
+    """
+    # Max query length
+    if len(query) > 2000:
+        raise PromQLValidationError(
+            f"Query exceeds maximum length (2000 chars). Length: {len(query)}"
+        )
+
+    # Check for dangerous patterns
+    dangerous_patterns = [
+        # Very long label matchers (could indicate injection or expensive queries)
+        (r'\{[^}]{500,}\}', "Label matcher too long (>500 chars)"),
+        # Many range vectors in single query (expensive)
+        (r'(\[[^\]]+\].*){5,}', "Too many range vectors (>5)"),
+        # Many set operations chained together
+        (r'((?:^|\s)(?:or|and|unless)(?:\s|$).*){4,}', "Too many set operations (>4)"),
+    ]
+
+    for pattern, message in dangerous_patterns:
+        if re.search(pattern, query, re.IGNORECASE):
+            logger.warning(f"PromQL validation failed: {message}")
+            raise PromQLValidationError(f"Query validation failed: {message}")
+
+    # Check nested function depth (rough heuristic)
+    open_parens = 0
+    max_depth = 0
+    for char in query:
+        if char == '(':
+            open_parens += 1
+            max_depth = max(max_depth, open_parens)
+        elif char == ')':
+            open_parens -= 1
+
+    if max_depth > 10:
+        logger.warning(f"PromQL validation failed: Query too deeply nested (depth: {max_depth})")
+        raise PromQLValidationError(
+            f"Query too deeply nested (depth: {max_depth}, max: 10)"
+        )
+
+    logger.debug(f"PromQL validation passed (length: {len(query)}, depth: {max_depth})")
 
 # =============================================================================
 # PROMETHEUS CLIENT (Singleton)
@@ -74,12 +165,13 @@ def _sanitize_promql(query: str) -> str:
     return sanitized
 
 
-def query_prometheus(promql: str) -> dict:
+def query_prometheus(promql: str, use_cache: bool = True) -> dict:
     """
-    Execute a PromQL query against Prometheus.
+    Execute a PromQL query against Prometheus with caching and validation.
 
     Args:
         promql: The PromQL query string
+        use_cache: Whether to use cached results (default: True)
 
     Returns:
         Dict containing the Prometheus API response
@@ -88,12 +180,36 @@ def query_prometheus(promql: str) -> dict:
     promql = _sanitize_promql(promql)
     logger.debug(f"Querying Prometheus: {promql[:100]}...")
 
+    # Validate query for safety
+    try:
+        _validate_promql(promql)
+    except PromQLValidationError as e:
+        logger.warning(f"Query validation failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+    # Check cache first
+    cache_key = f"prom_instant:{promql}"
+    if use_cache:
+        cache = _get_query_cache()
+        with _cache_lock:
+            if cache_key in cache:
+                logger.debug(f"Cache hit for query: {promql[:50]}...")
+                return cache[cache_key]
+
     try:
         prom = get_prometheus_client()
         result = prom.custom_query(query=promql)
 
         logger.debug(f"Query returned {len(result)} results")
-        return {"status": "success", "data": {"result": result}}
+        response = {"status": "success", "data": {"result": result}}
+
+        # Cache the result
+        if use_cache:
+            with _cache_lock:
+                _get_query_cache()[cache_key] = response
+                logger.debug(f"Cached query result (cache size: {len(_get_query_cache())})")
+
+        return response
 
     except Exception as e:
         logger.error(f"Prometheus query failed: {e}")
@@ -192,6 +308,12 @@ def prometheus_query_range(
     query = _sanitize_promql(query)
     logger.debug(f"Range query: {query[:100]}... from {start} to {end}, step {step}")
 
+    # Validate query for safety
+    try:
+        _validate_promql(query)
+    except PromQLValidationError as e:
+        return f"Query validation failed: {e}"
+
     try:
         prom = get_prometheus_client()
 
@@ -250,6 +372,32 @@ def prometheus_query_range(
     except Exception as e:
         logger.error(f"Prometheus range query failed: {e}")
         return f"Prometheus error: {e}"
+
+
+# =============================================================================
+# CACHE UTILITIES
+# =============================================================================
+
+def get_prometheus_cache_stats() -> dict:
+    """Get Prometheus query cache statistics for monitoring."""
+    cache = _get_query_cache()
+    with _cache_lock:
+        settings = get_settings()
+        return {
+            "current_size": len(cache),
+            "max_size": settings.cache_prometheus_maxsize,
+            "ttl_seconds": settings.cache_prometheus_ttl,
+        }
+
+
+def clear_prometheus_cache() -> int:
+    """Clear the Prometheus query cache. Returns number of entries cleared."""
+    cache = _get_query_cache()
+    with _cache_lock:
+        count = len(cache)
+        cache.clear()
+        logger.info(f"Cleared {count} entries from Prometheus cache")
+        return count
 
 
 # =============================================================================

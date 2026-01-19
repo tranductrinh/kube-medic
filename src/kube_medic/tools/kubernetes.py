@@ -17,17 +17,100 @@ Tools:
 - get_node_details: Get node details and conditions
 - list_configmaps: List ConfigMaps in a namespace
 - list_secrets: List Secret names (not values)
+
+Features:
+- API response caching with configurable TTL (30s default)
+- Singleton API clients
 """
 
-from kube_medic.config import get_settings
-from kube_medic.logging_config import get_logger
+from threading import Lock
+from typing import Any, Callable
+
+from cachetools import TTLCache
+from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from kubernetes import client, config
+from kube_medic.config import get_settings
+from kube_medic.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# API RESPONSE CACHE
+# =============================================================================
+
+_k8s_cache: TTLCache | None = None
+_k8s_cache_lock = Lock()
+
+
+def _get_k8s_cache() -> TTLCache:
+    """Get or create the K8s API cache with settings from config."""
+    global _k8s_cache
+    if _k8s_cache is None:
+        settings = get_settings()
+        _k8s_cache = TTLCache(
+            maxsize=settings.cache_k8s_maxsize,
+            ttl=settings.cache_k8s_ttl,
+        )
+        logger.info(
+            f"Kubernetes API cache initialized "
+            f"(maxsize={settings.cache_k8s_maxsize}, ttl={settings.cache_k8s_ttl}s)"
+        )
+    return _k8s_cache
+
+
+def _cached_k8s_call(cache_key: str, fn: Callable, *args, **kwargs) -> Any:
+    """
+    Execute K8s API call with caching.
+
+    Args:
+        cache_key: Unique key for this API call
+        fn: The API function to call
+        *args, **kwargs: Arguments to pass to the function
+
+    Returns:
+        The API response (cached or fresh)
+    """
+    cache = _get_k8s_cache()
+
+    with _k8s_cache_lock:
+        if cache_key in cache:
+            logger.debug(f"K8s cache hit: {cache_key}")
+            return cache[cache_key]
+
+    # Execute the API call (outside the lock to avoid blocking)
+    result = fn(*args, **kwargs)
+
+    with _k8s_cache_lock:
+        cache[cache_key] = result
+        logger.debug(f"K8s cache stored: {cache_key} (cache size: {len(cache)})")
+
+    return result
+
+
+def get_k8s_cache_stats() -> dict:
+    """Get Kubernetes API cache statistics for monitoring."""
+    cache = _get_k8s_cache()
+    with _k8s_cache_lock:
+        settings = get_settings()
+        return {
+            "current_size": len(cache),
+            "max_size": settings.cache_k8s_maxsize,
+            "ttl_seconds": settings.cache_k8s_ttl,
+        }
+
+
+def clear_k8s_cache() -> int:
+    """Clear the Kubernetes API cache. Returns number of entries cleared."""
+    cache = _get_k8s_cache()
+    with _k8s_cache_lock:
+        count = len(cache)
+        cache.clear()
+        logger.info(f"Cleared {count} entries from K8s cache")
+        return count
 
 # =============================================================================
 # KUBERNETES CLIENT (Singleton Pattern)
@@ -197,7 +280,12 @@ def list_namespaces() -> str:
     try:
         logger.debug("Listing namespaces")
         v1 = get_k8s_client()
-        namespaces = v1.list_namespace()
+
+        # Use caching for namespace list
+        namespaces = _cached_k8s_call(
+            "list_namespaces",
+            v1.list_namespace,
+        )
 
         if not namespaces.items:
             logger.debug("No namespaces found in cluster")
@@ -228,14 +316,21 @@ def list_pods(namespace: str = "", label_selector: str = "") -> str:
         logger.debug(f"Listing pods (namespace={namespace or 'all'}, selector={label_selector or 'none'})")
         v1 = get_k8s_client()
 
+        # Build cache key from parameters
+        cache_key = f"list_pods:{namespace}:{label_selector}"
+
         if namespace:
-            pods = v1.list_namespaced_pod(
+            pods = _cached_k8s_call(
+                cache_key,
+                v1.list_namespaced_pod,
                 namespace=namespace,
-                label_selector=label_selector or None
+                label_selector=label_selector or None,
             )
         else:
-            pods = v1.list_pod_for_all_namespaces(
-                label_selector=label_selector or None
+            pods = _cached_k8s_call(
+                cache_key,
+                v1.list_pod_for_all_namespaces,
+                label_selector=label_selector or None,
             )
 
         if not pods.items:
@@ -446,10 +541,20 @@ def get_events(namespace: str = "", resource_name: str = "") -> str:
         logger.debug(f"Getting events (namespace={namespace or 'all'}, resource={resource_name or 'all'})")
         v1 = get_k8s_client()
 
+        # Build cache key (note: resource_name filtering is done post-fetch)
+        cache_key = f"get_events:{namespace}"
+
         if namespace:
-            events = v1.list_namespaced_event(namespace=namespace)
+            events = _cached_k8s_call(
+                cache_key,
+                v1.list_namespaced_event,
+                namespace=namespace,
+            )
         else:
-            events = v1.list_event_for_all_namespaces()
+            events = _cached_k8s_call(
+                cache_key,
+                v1.list_event_for_all_namespaces,
+            )
 
         # Filter by resource name if specified
         if resource_name:
@@ -500,10 +605,19 @@ def list_deployments(namespace: str = "") -> str:
         logger.debug(f"Listing deployments (namespace={namespace or 'all'})")
         apps = get_apps_client()
 
+        cache_key = f"list_deployments:{namespace}"
+
         if namespace:
-            deployments = apps.list_namespaced_deployment(namespace=namespace)
+            deployments = _cached_k8s_call(
+                cache_key,
+                apps.list_namespaced_deployment,
+                namespace=namespace,
+            )
         else:
-            deployments = apps.list_deployment_for_all_namespaces()
+            deployments = _cached_k8s_call(
+                cache_key,
+                apps.list_deployment_for_all_namespaces,
+            )
 
         if not deployments.items:
             logger.debug("No deployments found")
@@ -540,10 +654,19 @@ def list_services(namespace: str = "") -> str:
         logger.debug(f"Listing services (namespace={namespace or 'all'})")
         v1 = get_k8s_client()
 
+        cache_key = f"list_services:{namespace}"
+
         if namespace:
-            services = v1.list_namespaced_service(namespace=namespace)
+            services = _cached_k8s_call(
+                cache_key,
+                v1.list_namespaced_service,
+                namespace=namespace,
+            )
         else:
-            services = v1.list_service_for_all_namespaces()
+            services = _cached_k8s_call(
+                cache_key,
+                v1.list_service_for_all_namespaces,
+            )
 
         if not services.items:
             logger.debug("No services found")

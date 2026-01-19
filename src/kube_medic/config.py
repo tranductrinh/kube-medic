@@ -110,6 +110,75 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # MEMORY CONFIGURATION
+    # =========================================================================
+    memory_max_threads: int = Field(
+        default=1000,
+        description="Maximum number of conversation threads to keep in memory",
+        gt=0,
+    )
+    memory_ttl_seconds: int = Field(
+        default=3600,
+        description="Time-to-live in seconds for conversation memory (default: 1 hour)",
+        gt=0,
+    )
+
+    # =========================================================================
+    # RATE LIMITING CONFIGURATION
+    # =========================================================================
+    rate_limit_webhook: str = Field(
+        default="30/minute",
+        description="Rate limit for webhook endpoint (requests per time period)",
+    )
+    rate_limit_query: str = Field(
+        default="10/minute",
+        description="Rate limit for query endpoint (requests per time period)",
+    )
+
+    # =========================================================================
+    # CACHING CONFIGURATION
+    # =========================================================================
+    cache_prometheus_ttl: int = Field(
+        default=60,
+        description="TTL in seconds for Prometheus query cache",
+        gt=0,
+    )
+    cache_prometheus_maxsize: int = Field(
+        default=100,
+        description="Maximum number of Prometheus queries to cache",
+        gt=0,
+    )
+    cache_k8s_ttl: int = Field(
+        default=30,
+        description="TTL in seconds for Kubernetes API cache (shorter due to dynamic nature)",
+        gt=0,
+    )
+    cache_k8s_maxsize: int = Field(
+        default=200,
+        description="Maximum number of Kubernetes API calls to cache",
+        gt=0,
+    )
+
+    # =========================================================================
+    # RETRY CONFIGURATION
+    # =========================================================================
+    webhook_max_retries: int = Field(
+        default=3,
+        description="Maximum number of retries for failed webhook processing",
+        gt=0,
+    )
+    webhook_retry_min_wait: int = Field(
+        default=2,
+        description="Minimum wait time in seconds between retries",
+        gt=0,
+    )
+    webhook_retry_max_wait: int = Field(
+        default=30,
+        description="Maximum wait time in seconds between retries",
+        gt=0,
+    )
+
+    # =========================================================================
     # API SERVER CONFIGURATION
     # =========================================================================
     api_host: str = Field(

@@ -11,18 +11,29 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from kube_medic.agents import create_supervisor_agent
 from kube_medic.config import get_settings
 from kube_medic.logging_config import get_logger, setup_logging
-from kube_medic.utils.helpers import ask_agent
+from kube_medic.utils.helpers import ask_agent, get_recursion_stats
 
 logger = get_logger(__name__)
+
+# =============================================================================
+# RATE LIMITER
+# =============================================================================
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 # =============================================================================
@@ -62,15 +73,70 @@ class HealthResponse(BaseModel):
 # =============================================================================
 
 
+class FailedWebhook(BaseModel):
+    """Record of a failed webhook processing attempt."""
+    thread_id: str
+    payload: dict[str, Any]
+    error: str
+    timestamp: str
+    retry_count: int
+
+
 class AppState:
     """Application state container."""
 
     def __init__(self):
         self.agent = None
         self.processing_lock = asyncio.Lock()
+        self.failed_webhooks: list[FailedWebhook] = []  # Dead letter queue
+        self.failed_webhooks_lock = asyncio.Lock()
+        self.webhook_stats = {
+            "total_received": 0,
+            "total_success": 0,
+            "total_failed": 0,
+        }
 
 
 app_state = AppState()
+
+
+# =============================================================================
+# RETRY HELPER
+# =============================================================================
+
+def _create_retry_decorator():
+    """Create a retry decorator with settings from config."""
+    settings = get_settings()
+    return retry(
+        stop=stop_after_attempt(settings.webhook_max_retries),
+        wait=wait_exponential(
+            multiplier=1,
+            min=settings.webhook_retry_min_wait,
+            max=settings.webhook_retry_max_wait,
+        ),
+        retry=retry_if_exception_type(Exception),
+        reraise=True,
+    )
+
+
+def invoke_agent_with_retry(agent, query: str, thread_id: str) -> str:
+    """Invoke agent with retry logic."""
+    settings = get_settings()
+
+    @retry(
+        stop=stop_after_attempt(settings.webhook_max_retries),
+        wait=wait_exponential(
+            multiplier=1,
+            min=settings.webhook_retry_min_wait,
+            max=settings.webhook_retry_max_wait,
+        ),
+        retry=retry_if_exception_type(Exception),
+        reraise=True,
+    )
+    def _invoke():
+        return ask_agent(agent, query, thread_id)
+
+    return _invoke()
 
 
 # =============================================================================
@@ -111,6 +177,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Add rate limiting to the app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # =============================================================================
@@ -241,7 +311,7 @@ Please investigate these alerts together. They may be related. Find the root cau
 
 def process_payload_background(payload: dict[str, Any], thread_id: str) -> None:
     """
-    Process webhook payload in background (fire-and-forget).
+    Process webhook payload in background with retry logic and dead letter queue.
 
     Args:
         payload: The webhook payload
@@ -258,17 +328,47 @@ def process_payload_background(payload: dict[str, Any], thread_id: str) -> None:
     logger.info(f"[{thread_id}] Invoking agent for investigation...")
     logger.debug(f"[{thread_id}] Query length: {len(query)} chars")
 
+    settings = get_settings()
+
     try:
-        response = ask_agent(app_state.agent, query, thread_id)
+        # Use retry logic for resilience
+        response = invoke_agent_with_retry(app_state.agent, query, thread_id)
         elapsed = time.time() - start_time
         logger.info(
             f"[{thread_id}] Investigation complete in {elapsed:.2f}s, "
             f"response length: {len(response)} chars"
         )
         logger.debug(f"[{thread_id}] Response preview: {response[:300]}...")
+        app_state.webhook_stats["total_success"] += 1
+
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error(f"[{thread_id}] Investigation failed after {elapsed:.2f}s: {e}")
+        logger.error(
+            f"[{thread_id}] Investigation failed after {elapsed:.2f}s "
+            f"and {settings.webhook_max_retries} retries: {e}"
+        )
+        app_state.webhook_stats["total_failed"] += 1
+
+        # Add to dead letter queue
+        failed_entry = FailedWebhook(
+            thread_id=thread_id,
+            payload=payload,
+            error=str(e),
+            timestamp=datetime.utcnow().isoformat(),
+            retry_count=settings.webhook_max_retries,
+        )
+
+        # Use a simple list append (thread-safe for append in CPython)
+        app_state.failed_webhooks.append(failed_entry)
+
+        # Keep only last 100 failures to prevent memory growth
+        if len(app_state.failed_webhooks) > 100:
+            app_state.failed_webhooks = app_state.failed_webhooks[-100:]
+
+        logger.warning(
+            f"[{thread_id}] Added to dead letter queue. "
+            f"Total failed: {len(app_state.failed_webhooks)}"
+        )
 
 
 # =============================================================================
@@ -288,7 +388,9 @@ async def health_check() -> HealthResponse:
 
 
 @app.post("/webhook", response_model=WebhookResponse)
+@limiter.limit(lambda: get_settings().rate_limit_webhook)
 async def webhook(
+        request: Request,
         payload: dict[str, Any],
         background_tasks: BackgroundTasks,
 ) -> WebhookResponse:
@@ -315,6 +417,9 @@ async def webhook(
         logger.warning("Webhook received but agent not initialized")
         raise HTTPException(status_code=503, detail="Agent not initialized")
 
+    # Track webhook stats
+    app_state.webhook_stats["total_received"] += 1
+
     thread_id = generate_thread_id(payload)
 
     # Determine payload type for logging
@@ -336,7 +441,8 @@ async def webhook(
 
 
 @app.post("/webhook/sync", response_model=QueryResponse)
-async def webhook_sync(payload: dict[str, Any]) -> QueryResponse:
+@limiter.limit(lambda: get_settings().rate_limit_webhook)
+async def webhook_sync(request: Request, payload: dict[str, Any]) -> QueryResponse:
     """
     Receive any webhook payload and process synchronously.
 
@@ -383,7 +489,8 @@ async def webhook_sync(payload: dict[str, Any]) -> QueryResponse:
 
 
 @app.post("/query", response_model=QueryResponse)
-async def query_agent(request: QueryRequest) -> QueryResponse:
+@limiter.limit(lambda: get_settings().rate_limit_query)
+async def query_agent(request: Request, query_request: QueryRequest) -> QueryResponse:
     """
     Send a direct query to the supervisor agent.
 
@@ -394,10 +501,10 @@ async def query_agent(request: QueryRequest) -> QueryResponse:
         logger.warning("Query received but agent not initialized")
         raise HTTPException(status_code=503, detail="Agent not initialized")
 
-    thread_id = request.thread_id
-    question_preview = request.question[:80] + "..." if len(request.question) > 80 else request.question
+    thread_id = query_request.thread_id
+    question_preview = query_request.question[:80] + "..." if len(query_request.question) > 80 else query_request.question
     logger.info(f"[{thread_id}] Received query: {question_preview}")
-    logger.debug(f"[{thread_id}] Full question length: {len(request.question)} chars")
+    logger.debug(f"[{thread_id}] Full question length: {len(query_request.question)} chars")
 
     start_time = time.time()
 
@@ -406,8 +513,8 @@ async def query_agent(request: QueryRequest) -> QueryResponse:
         None,
         ask_agent,
         app_state.agent,
-        request.question,
-        request.thread_id,
+        query_request.question,
+        query_request.thread_id,
     )
 
     elapsed = time.time() - start_time
@@ -416,7 +523,108 @@ async def query_agent(request: QueryRequest) -> QueryResponse:
         f"response length: {len(response)} chars"
     )
 
-    return QueryResponse(response=response, thread_id=request.thread_id)
+    return QueryResponse(response=response, thread_id=query_request.thread_id)
+
+
+# =============================================================================
+# ADMIN ENDPOINTS
+# =============================================================================
+
+
+class AdminStatsResponse(BaseModel):
+    """Response for admin statistics."""
+    webhook_stats: dict[str, int]
+    failed_webhook_count: int
+    memory_stats: dict[str, Any] | None
+    recursion_stats: dict[str, Any]
+
+
+class FailedWebhooksResponse(BaseModel):
+    """Response for failed webhooks endpoint."""
+    count: int
+    failures: list[FailedWebhook]
+
+
+@app.get("/admin/stats", response_model=AdminStatsResponse)
+async def get_admin_stats() -> AdminStatsResponse:
+    """
+    Get system statistics for monitoring.
+
+    Returns webhook processing stats, memory usage, and recursion limit hits.
+    """
+    # Get memory stats from supervisor agent's checkpointer if available
+    memory_stats = None
+    if app_state.agent is not None:
+        try:
+            # Try to access the checkpointer's stats method
+            checkpointer = getattr(app_state.agent, 'checkpointer', None)
+            if checkpointer and hasattr(checkpointer, 'get_stats'):
+                memory_stats = checkpointer.get_stats()
+        except Exception as e:
+            logger.debug(f"Could not get memory stats: {e}")
+
+    return AdminStatsResponse(
+        webhook_stats=app_state.webhook_stats,
+        failed_webhook_count=len(app_state.failed_webhooks),
+        memory_stats=memory_stats,
+        recursion_stats=get_recursion_stats(),
+    )
+
+
+@app.get("/admin/failed-webhooks", response_model=FailedWebhooksResponse)
+async def get_failed_webhooks() -> FailedWebhooksResponse:
+    """
+    View failed webhook processing attempts (dead letter queue).
+
+    Returns the list of webhooks that failed after all retries.
+    """
+    return FailedWebhooksResponse(
+        count=len(app_state.failed_webhooks),
+        failures=app_state.failed_webhooks,
+    )
+
+
+@app.delete("/admin/failed-webhooks")
+async def clear_failed_webhooks() -> dict[str, str]:
+    """
+    Clear the dead letter queue.
+
+    Use this after investigating and addressing failed webhooks.
+    """
+    count = len(app_state.failed_webhooks)
+    app_state.failed_webhooks.clear()
+    logger.info(f"Cleared {count} failed webhooks from dead letter queue")
+    return {"status": "ok", "cleared": str(count)}
+
+
+@app.post("/admin/retry-webhook/{index}")
+async def retry_failed_webhook(
+    index: int,
+    background_tasks: BackgroundTasks,
+) -> dict[str, str]:
+    """
+    Retry a specific failed webhook by its index in the dead letter queue.
+
+    Args:
+        index: Index of the failed webhook to retry (0-based)
+    """
+    if index < 0 or index >= len(app_state.failed_webhooks):
+        raise HTTPException(status_code=404, detail="Failed webhook not found")
+
+    failed = app_state.failed_webhooks[index]
+
+    # Remove from dead letter queue
+    app_state.failed_webhooks.pop(index)
+
+    # Requeue for processing
+    background_tasks.add_task(
+        process_payload_background,
+        failed.payload,
+        failed.thread_id,
+    )
+
+    logger.info(f"Retrying failed webhook {failed.thread_id}")
+    return {"status": "ok", "thread_id": failed.thread_id}
 
 
 # =============================================================================

@@ -246,7 +246,7 @@ class TestSupervisorSystemPrompt:
 class TestCreateSupervisorAgent:
     """Tests for create_supervisor_agent function."""
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -280,7 +280,7 @@ class TestCreateSupervisorAgent:
         mock_create_net.assert_called_once()
         mock_create_email.assert_called_once()
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -316,7 +316,7 @@ class TestCreateSupervisorAgent:
         call_kwargs = mock_create_agent.call_args[1]
         assert call_kwargs["checkpointer"] is mock_checkpointer
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -350,7 +350,7 @@ class TestCreateSupervisorAgent:
         call_kwargs = mock_create_agent.call_args[1]
         assert call_kwargs["checkpointer"] is None
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -383,7 +383,7 @@ class TestCreateSupervisorAgent:
         call_kwargs = mock_create_agent.call_args[1]
         assert call_kwargs["model"] is mock_llm
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -418,7 +418,7 @@ class TestCreateSupervisorAgent:
         call_kwargs = mock_create_agent.call_args[1]
         assert call_kwargs["system_prompt"] == SUPERVISOR_SYSTEM_PROMPT
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -451,7 +451,7 @@ class TestCreateSupervisorAgent:
         tools = call_kwargs["tools"]
         assert len(tools) == 4
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -489,7 +489,7 @@ class TestCreateSupervisorAgent:
         assert "ask_network_expert" in tool_names
         assert "ask_email_expert" in tool_names
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -525,7 +525,7 @@ class TestCreateSupervisorAgent:
 class TestSupervisorToolDelegation:
     """Tests for supervisor tool delegation to specialists."""
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -575,7 +575,7 @@ class TestSupervisorToolDelegation:
         mock_k8s_agent.invoke.assert_called_once()
         assert result == "K8s response"
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -629,7 +629,7 @@ class TestSupervisorToolDelegation:
 class TestSupervisorToolSchemas:
     """Tests for supervisor tool schemas."""
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -664,7 +664,7 @@ class TestSupervisorToolSchemas:
         for tool in tools:
             assert tool.args_schema == AgentQueryInput
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")
@@ -700,7 +700,7 @@ class TestSupervisorToolSchemas:
         assert "Kubernetes" in k8s_tool.description
         assert "Pod" in k8s_tool.description or "pod" in k8s_tool.description
 
-    @patch("kube_medic.agents.supervisor.InMemorySaver")
+    @patch("kube_medic.agents.supervisor.BoundedMemorySaver")
     @patch("kube_medic.agents.supervisor.create_agent")
     @patch("kube_medic.agents.supervisor.create_email_agent")
     @patch("kube_medic.agents.supervisor.create_network_agent")

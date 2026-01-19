@@ -5,20 +5,92 @@ This module defines the supervisor agent that coordinates specialist agents
 and maintains conversation memory.
 """
 
+from threading import Lock
+from typing import Any
+
+from cachetools import TTLCache
 from langchain.agents import create_agent
 from langchain_core.runnables import Runnable
 from langchain_core.tools import tool
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 
 from kube_medic.agents.email_agent import create_email_agent
 from kube_medic.agents.kubernetes_agent import create_kubernetes_agent
 from kube_medic.agents.network_agent import create_network_agent
 from kube_medic.agents.prometheus_agent import create_prometheus_agent
+from kube_medic.config import get_settings
 from kube_medic.logging_config import get_logger
 from kube_medic.utils.helpers import get_llm
 
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# BOUNDED MEMORY SAVER (TTL + Max Size)
+# =============================================================================
+
+class BoundedMemorySaver(BaseCheckpointSaver):
+    """
+    Memory saver with TTL and max size limits to prevent unbounded growth.
+
+    This implementation wraps conversation checkpoints in a TTLCache that
+    automatically evicts old entries based on time and size limits.
+    """
+
+    def __init__(self, maxsize: int = 1000, ttl: int = 3600):
+        """
+        Initialize bounded memory saver.
+
+        Args:
+            maxsize: Maximum number of conversation threads to keep
+            ttl: Time-to-live in seconds for each thread
+        """
+        super().__init__()
+        self._cache: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._lock = Lock()
+        self._maxsize = maxsize
+        self._ttl = ttl
+        logger.info(f"BoundedMemorySaver initialized (maxsize={maxsize}, ttl={ttl}s)")
+
+    def _get_key(self, config: dict[str, Any]) -> str:
+        """Extract thread ID from config."""
+        return config.get("configurable", {}).get("thread_id", "default")
+
+    def get_tuple(self, config: dict[str, Any]):
+        """Get checkpoint tuple for a thread."""
+        with self._lock:
+            key = self._get_key(config)
+            result = self._cache.get(key)
+            if result:
+                logger.debug(f"Memory cache hit for thread: {key}")
+            return result
+
+    def put(self, config: dict[str, Any], checkpoint: dict[str, Any], metadata: dict[str, Any], new_versions: dict[str, Any]) -> dict[str, Any]:
+        """Store checkpoint for a thread."""
+        with self._lock:
+            key = self._get_key(config)
+            checkpoint_tuple = (checkpoint, metadata, new_versions)
+            self._cache[key] = checkpoint_tuple
+            logger.debug(f"Memory cache stored for thread: {key} (cache size: {len(self._cache)})")
+            return config
+
+    def list(self, config: dict[str, Any] | None = None, *, filter: dict[str, Any] | None = None, before: dict[str, Any] | None = None, limit: int | None = None):
+        """List checkpoints (yields stored checkpoints)."""
+        with self._lock:
+            for key, value in self._cache.items():
+                yield {"configurable": {"thread_id": key}}, value
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get cache statistics for monitoring."""
+        with self._lock:
+            return {
+                "current_size": len(self._cache),
+                "max_size": self._maxsize,
+                "ttl_seconds": self._ttl,
+                "threads": list(self._cache.keys())[:20],  # First 20 thread IDs
+            }
 
 
 # =============================================================================
@@ -159,7 +231,14 @@ def create_supervisor_agent(use_memory: bool = True) -> Runnable:
     agent_tools = [ask_kubernetes_expert, ask_prometheus_expert, ask_network_expert, ask_email_expert]
 
     # Create checkpointer for memory (if enabled)
-    checkpointer = InMemorySaver() if use_memory else None
+    # Uses BoundedMemorySaver to prevent unbounded memory growth
+    checkpointer = None
+    if use_memory:
+        settings = get_settings()
+        checkpointer = BoundedMemorySaver(
+            maxsize=settings.memory_max_threads,
+            ttl=settings.memory_ttl_seconds,
+        )
     logger.info(f"Memory enabled: {use_memory}")
 
     # Create supervisor agent

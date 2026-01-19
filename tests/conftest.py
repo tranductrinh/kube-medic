@@ -40,6 +40,56 @@ def clear_settings_cache():
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def reset_kubernetes_module_state():
+    """Reset kubernetes module singletons and cache between tests.
+
+    This prevents tests from interfering with each other via:
+    - Cached API clients
+    - Cached API responses
+    """
+    import kube_medic.tools.kubernetes as k8s_module
+
+    # Reset singletons
+    k8s_module._v1_client = None
+    k8s_module._apps_client = None
+    k8s_module._networking_client = None
+
+    # Reset cache
+    k8s_module._k8s_cache = None
+
+    yield
+
+    # Reset after test as well
+    k8s_module._v1_client = None
+    k8s_module._apps_client = None
+    k8s_module._networking_client = None
+    k8s_module._k8s_cache = None
+
+
+@pytest.fixture(autouse=True)
+def reset_prometheus_module_state():
+    """Reset prometheus module singletons and cache between tests.
+
+    This prevents tests from interfering with each other via:
+    - Cached Prometheus client
+    - Cached query results
+    """
+    import kube_medic.tools.prometheus as prom_module
+
+    # Reset singleton
+    prom_module._prom_client = None
+
+    # Reset cache
+    prom_module._query_cache = None
+
+    yield
+
+    # Reset after test as well
+    prom_module._prom_client = None
+    prom_module._query_cache = None
+
+
 @pytest.fixture
 def mock_env(monkeypatch):
     """Fixture for safely mocking environment variables.
@@ -75,6 +125,9 @@ def sample_config_env(mock_env):
     mock_env.set("OPENAI_API_KEY", "test-key")
     mock_env.set("OPENAI_MODEL", "gpt-5.2")
     mock_env.set("PROMETHEUS_URL", "http://prometheus:9090")
+    mock_env.set("SMTP_HOST", "smtp.test.com")
+    mock_env.set("EMAIL_FROM", "test@test.com")
+    mock_env.set("EMAIL_TO", "recipient@test.com")
     return mock_env
 
 
